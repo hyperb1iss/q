@@ -55,9 +55,9 @@ safety:
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
+| Variable            | Description                       |
+| ------------------- | --------------------------------- |
 | `ANTHROPIC_API_KEY` | Required. Your Anthropic API key. |
-| `Q_MODEL` | Override default model. |
-| `Q_CONFIG` | Path to config file. |
-| `DEBUG` | Enable debug output. |
+| `Q_MODEL`           | Override default model.           |
+| `Q_CONFIG`          | Path to config file.              |
+| `DEBUG`             | Enable debug output.              |

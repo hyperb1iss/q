@@ -51,6 +51,7 @@ function getDb(): Database {
   db.run(`
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
+      sdk_session_id TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       model TEXT NOT NULL,
@@ -170,6 +171,14 @@ export function updateSessionStats(
 }
 
 /**
+ * Update the SDK session ID for a session
+ */
+export function updateSdkSessionId(sessionId: string, sdkSessionId: string): void {
+  const database = getDb();
+  database.run('UPDATE sessions SET sdk_session_id = ? WHERE id = ?', [sdkSessionId, sessionId]);
+}
+
+/**
  * Get a session by ID
  */
 export function getSession(id: string): Session | null {
@@ -179,6 +188,7 @@ export function getSession(id: string): Session | null {
     .query<
       {
         id: string;
+        sdk_session_id: string | null;
         created_at: number;
         updated_at: number;
         model: string;
@@ -206,7 +216,7 @@ export function getSession(id: string): Session | null {
     )
     .all(id);
 
-  return {
+  const session: Session = {
     id: row.id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -226,6 +236,10 @@ export function getSession(id: string): Session | null {
       return msg;
     }),
   };
+  if (row.sdk_session_id) {
+    session.sdkSessionId = row.sdk_session_id;
+  }
+  return session;
 }
 
 /**

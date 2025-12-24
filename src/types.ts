@@ -148,6 +148,8 @@ export interface Message {
  */
 export interface Session {
   id: string;
+  /** SDK session ID for resume functionality */
+  sdkSessionId?: string;
   createdAt: number;
   updatedAt: number;
   model: string;

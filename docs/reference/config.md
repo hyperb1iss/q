@@ -15,9 +15,9 @@ interface Config {
 
   // Context injection settings
   context: {
-    git: boolean;      // Include git branch, status, commits
-    cwd: boolean;      // Include current working directory
-    lastCommand: boolean;  // Include previous command output
+    git: boolean; // Include git branch, status, commits
+    cwd: boolean; // Include current working directory
+    lastCommand: boolean; // Include previous command output
   };
 
   // Additional system prompt
@@ -28,9 +28,9 @@ interface Config {
 
   // Safety settings
   safety: {
-    confirmDestructive: boolean;  // Confirm dangerous commands
-    maxCostPerQuery: number;      // USD limit per query
-    blockedCommands: string[];    // Patterns to never execute
+    confirmDestructive: boolean; // Confirm dangerous commands
+    maxCostPerQuery: number; // USD limit per query
+    blockedCommands: string[]; // Patterns to never execute
   };
 }
 ```
@@ -61,11 +61,11 @@ safety:
 
 The Claude model to use for queries.
 
-| Value | Description |
-|-------|-------------|
+| Value    | Description                          |
+| -------- | ------------------------------------ |
 | `sonnet` | Balanced speed and quality (default) |
-| `opus` | Maximum capability, slower |
-| `haiku` | Fastest, best for simple queries |
+| `opus`   | Maximum capability, slower           |
+| `haiku`  | Fastest, best for simple queries     |
 
 ### maxTokens
 
@@ -75,16 +75,17 @@ Maximum tokens in the response. Range: 1-4096.
 
 SilkCircuit color theme variant.
 
-| Value | Description |
-|-------|-------------|
-| `neon` | Full intensity, maximum vibrancy (default) |
-| `vibrant` | 85% intensity |
-| `soft` | 70% intensity, easier on eyes |
-| `glow` | Maximum contrast |
+| Value     | Description                                |
+| --------- | ------------------------------------------ |
+| `neon`    | Full intensity, maximum vibrancy (default) |
+| `vibrant` | 85% intensity                              |
+| `soft`    | 70% intensity, easier on eyes              |
+| `glow`    | Maximum contrast                           |
 
 ### context.git
 
 When `true`, includes:
+
 - Current branch name
 - Clean/dirty status
 - Commits ahead/behind
@@ -112,7 +113,8 @@ q @explain "$(cat error.log)"
 
 ### safety.confirmDestructive
 
-When `true`, always prompts for confirmation before executing commands that match destructive patterns (rm, drop, delete, etc.).
+When `true`, always prompts for confirmation before executing commands that match destructive
+patterns (rm, drop, delete, etc.).
 
 ### safety.maxCostPerQuery
 

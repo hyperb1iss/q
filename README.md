@@ -33,12 +33,12 @@ q -x "find all TODO comments"
 
 ## Modes
 
-| Mode | Invocation | Description |
-|------|------------|-------------|
-| **Query** | `q "question"` | Single question, streaming response |
-| **Pipe** | `stdin \| q "prompt"` | Inject stdin as context |
-| **Interactive** | `q` or `q -i` | Full TUI with multi-turn conversation |
-| **Execute** | `q -x "task"` | Agent mode with tool access |
+| Mode            | Invocation            | Description                           |
+| --------------- | --------------------- | ------------------------------------- |
+| **Query**       | `q "question"`        | Single question, streaming response   |
+| **Pipe**        | `stdin \| q "prompt"` | Inject stdin as context               |
+| **Interactive** | `q` or `q -i`         | Full TUI with multi-turn conversation |
+| **Execute**     | `q -x "task"`         | Agent mode with tool access           |
 
 ## Configuration
 
@@ -53,8 +53,8 @@ context:
   cwd: true
 
 prompts:
-  explain: "Explain this error and suggest a fix:"
-  review: "Review this code for issues:"
+  explain: 'Explain this error and suggest a fix:'
+  review: 'Review this code for issues:'
 ```
 
 ## Requirements

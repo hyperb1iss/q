@@ -9,7 +9,7 @@ import * as readline from 'node:readline';
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import type { SDKAssistantMessage, SDKResultMessage } from './lib/agent.js';
+import type { SDKAssistantMessage, SDKResultMessage, SDKSystemMessage } from './lib/agent.js';
 import { query, streamQuery } from './lib/agent.js';
 import { color, semantic, status } from './lib/colors.js';
 import { loadQConfig } from './lib/config.js';
@@ -21,6 +21,7 @@ import {
   getLastSession,
   getSession,
   listSessions,
+  updateSdkSessionId,
   updateSessionStats,
 } from './lib/storage.js';
 import type { CliArgs, Config, Mode } from './types.js';
@@ -239,19 +240,39 @@ async function main(): Promise<void> {
       console.log(semantic.muted('Use --sessions to list available sessions'));
       process.exit(1);
     }
+
+    // Check if we have an SDK session ID to resume
+    if (!session.sdkSessionId) {
+      console.error(semantic.error('Session cannot be resumed (no SDK session ID)'));
+      console.log(semantic.muted('This session was created before resume support was added'));
+      process.exit(1);
+    }
+
     console.log(semantic.info(`Resuming session ${session.id}`));
     console.log(
       semantic.muted(`${session.messages.length} messages, ${session.totalTokens} tokens`)
     );
     console.log();
+
     // Show last few messages for context
     for (const msg of session.messages.slice(-4)) {
       const prefix = msg.role === 'user' ? color('›', 'cyan') : color('◆', 'green');
       console.log(`${prefix} ${msg.content.slice(0, 100)}${msg.content.length > 100 ? '...' : ''}`);
     }
     console.log();
-    // TODO: Actually resume the conversation with the SDK
-    console.log(semantic.warning('Resume functionality coming soon'));
+
+    // Prompt for continuation message
+    const prompt = await promptForContinuation();
+    if (!prompt) {
+      console.log(semantic.muted('No message provided, exiting'));
+      return;
+    }
+
+    // Resume the agent session
+    await runAgent(prompt, args, config, {
+      id: session.id,
+      sdkSessionId: session.sdkSessionId,
+    });
     return;
   }
 
@@ -305,6 +326,7 @@ function buildQueryOptions(
     includePartialMessages?: boolean;
     permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
     canUseTool?: (toolName: string, input: Record<string, unknown>) => Promise<PermissionResult>;
+    resume?: string;
   } = {}
 ) {
   const opts: Parameters<typeof query>[1] = {};
@@ -332,6 +354,9 @@ function buildQueryOptions(
   }
   if (extras.canUseTool) {
     opts.canUseTool = extras.canUseTool;
+  }
+  if (extras.resume) {
+    opts.resume = extras.resume;
   }
 
   return opts;
@@ -466,6 +491,24 @@ async function runInteractive(args: CliArgs, _config: Config): Promise<void> {
 }
 
 /**
+ * Prompt user for a continuation message when resuming a session
+ */
+async function promptForContinuation(): Promise<string | null> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise<string | null>(resolve => {
+    rl.question(`${color('›', 'cyan')} `, answer => {
+      rl.close();
+      const trimmed = answer.trim();
+      return resolve(trimmed || null);
+    });
+  });
+}
+
+/**
  * Prompt user for tool approval via CLI
  */
 async function promptToolApproval(
@@ -554,12 +597,17 @@ function formatToolCall(toolName: string, input: Record<string, unknown>): strin
 /**
  * Run agent mode with tools (streaming)
  */
-async function runAgent(task: string, args: CliArgs, _config: Config): Promise<void> {
+async function runAgent(
+  task: string,
+  args: CliArgs,
+  _config: Config,
+  resumeSession?: { id: string; sdkSessionId: string }
+): Promise<void> {
   const quiet = args.quiet ?? false;
 
-  // Create session and save user message
+  // Create session and save user message (unless resuming)
   const modelId = (args.model ? MODEL_MAP[args.model] : undefined) ?? 'claude-sonnet-4-20250514';
-  const session = createSession(modelId, process.cwd());
+  const session = resumeSession ? { id: resumeSession.id } : createSession(modelId, process.cwd());
   addMessage(session.id, 'user', task);
 
   if (!quiet) {
@@ -608,14 +656,25 @@ async function runAgent(task: string, args: CliArgs, _config: Config): Promise<v
 
   try {
     // Agent mode - enable common tools with custom permission handler
-    const opts = buildQueryOptions(args, {
+    const queryExtras: Parameters<typeof buildQueryOptions>[1] = {
       systemPrompt: SYSTEM_PROMPT,
       tools: [...INTERACTIVE_TOOLS, 'Write', 'Edit'],
       includePartialMessages: true,
       canUseTool,
-    });
+    };
+    if (resumeSession?.sdkSessionId) {
+      queryExtras.resume = resumeSession.sdkSessionId;
+    }
+    const opts = buildQueryOptions(args, queryExtras);
 
     for await (const message of streamQuery(task, opts)) {
+      // Capture SDK session ID from init message and store (for new sessions only)
+      if (message.type === 'system') {
+        const sysMsg = message as SDKSystemMessage;
+        if (sysMsg.subtype === 'init' && sysMsg.session_id && !resumeSession) {
+          updateSdkSessionId(session.id, sysMsg.session_id);
+        }
+      }
       // Handle tool use
       if (message.type === 'assistant') {
         const assistantMsg = message as SDKAssistantMessage;

@@ -8,20 +8,20 @@ q [query] [options]
 
 ## Arguments
 
-| Argument | Description |
-|----------|-------------|
-| `query` | The question or prompt (optional in interactive mode) |
+| Argument | Description                                           |
+| -------- | ----------------------------------------------------- |
+| `query`  | The question or prompt (optional in interactive mode) |
 
 ## Options
 
-| Option | Alias | Description |
-|--------|-------|-------------|
-| `--interactive` | `-i` | Open interactive TUI mode |
-| `--execute` | `-x` | Enable agent tools (Read, Glob, Grep, Bash) |
-| `--resume <id>` | `-r` | Resume a previous session ("last" for most recent) |
-| `--model <model>` | `-m` | Model to use: sonnet, opus, haiku |
-| `--version` | | Show version number |
-| `--help` | | Show help |
+| Option            | Alias | Description                                        |
+| ----------------- | ----- | -------------------------------------------------- |
+| `--interactive`   | `-i`  | Open interactive TUI mode                          |
+| `--execute`       | `-x`  | Enable agent tools (Read, Glob, Grep, Bash)        |
+| `--resume <id>`   | `-r`  | Resume a previous session ("last" for most recent) |
+| `--model <model>` | `-m`  | Model to use: sonnet, opus, haiku                  |
+| `--version`       |       | Show version number                                |
+| `--help`          |       | Show help                                          |
 
 ## Examples
 
@@ -70,8 +70,8 @@ q -m haiku "quick question"
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Error (invalid args, API error, etc.) |
-| 130 | Interrupted (Ctrl+C) |
+| Code | Meaning                               |
+| ---- | ------------------------------------- |
+| 0    | Success                               |
+| 1    | Error (invalid args, API error, etc.) |
+| 130  | Interrupted (Ctrl+C)                  |

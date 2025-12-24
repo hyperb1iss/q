@@ -94,6 +94,7 @@ bun run docs:dev
 ### Working with the Claude SDK
 
 The agent integration lives in `src/hooks/useAgent.ts`. Key patterns:
+
 - Use async generators for streaming
 - Handle all message types (system, assistant, user, result)
 - Session IDs enable multi-turn conversations

@@ -48,6 +48,8 @@ export interface QueryOptions {
   onText?: (text: string) => void;
   /** Signal for cancellation */
   signal?: AbortSignal;
+  /** Resume a previous session by SDK session ID */
+  resume?: string;
 }
 
 export interface QueryResult {
@@ -114,6 +116,11 @@ function buildSdkOptions(abortController: AbortController, options: QueryOptions
       }
       return userCanUseTool(toolName, input);
     };
+  }
+
+  // Resume a previous session
+  if (options.resume !== undefined) {
+    sdkOptions.resume = options.resume;
   }
 
   return sdkOptions;

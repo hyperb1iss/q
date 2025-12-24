@@ -2,15 +2,15 @@
 
 > The Shell's Quiet Companion
 
-**Version:** 0.1.0-draft
-**Last Updated:** 2024-12-24
-**Status:** Planning
+**Version:** 0.1.0-draft **Last Updated:** 2024-12-24 **Status:** Planning
 
 ---
 
 ## Executive Summary
 
-**q** is a minimal, elegant CLI tool that brings Claude's agent capabilities directly into your terminal workflow. It's not a replacement for Claude Code—it's a lightning-fast complement for quick queries, pipe-based context injection, and seamless command execution.
+**q** is a minimal, elegant CLI tool that brings Claude's agent capabilities directly into your
+terminal workflow. It's not a replacement for Claude Code—it's a lightning-fast complement for quick
+queries, pipe-based context injection, and seamless command execution.
 
 **Philosophy:** Zero friction, maximum power. Think **fzf meets Claude**.
 
@@ -65,6 +65,7 @@ q "explain the difference between merge and rebase"
 ```
 
 **Behavior:**
+
 - Streams response to stdout
 - Renders markdown inline
 - Displays token count on completion
@@ -79,6 +80,7 @@ pbpaste | q "review this code"
 ```
 
 **Behavior:**
+
 - Reads stdin until EOF
 - Injects content as context with the prompt
 - Formats: `<context>\n{stdin}\n</context>\n\n{prompt}`
@@ -93,6 +95,7 @@ q --interactive
 ```
 
 **Behavior:**
+
 - Full-screen terminal UI
 - Multi-turn conversation
 - History navigation (up/down arrows)
@@ -107,6 +110,7 @@ q --execute "run the tests and fix any failures"
 ```
 
 **Behavior:**
+
 - Enables tool access: Read, Glob, Grep, Bash
 - Shows approval UI before each command
 - Audit log of all executions
@@ -120,6 +124,7 @@ q --resume abc123 # Resume specific session
 ```
 
 **Behavior:**
+
 - Loads previous conversation from SQLite
 - Continues with full context preserved
 - Updates session with new turns
@@ -233,24 +238,24 @@ All colors use ANSI true color (24-bit) for maximum vibrancy on modern terminals
 ```typescript
 export const colors = {
   // Primary palette
-  purple:  '\x1b[38;2;225;53;255m',   // #e135ff - Claude thoughts, keywords
-  cyan:    '\x1b[38;2;128;255;234m',  // #80ffea - User input, functions
-  coral:   '\x1b[38;2;255;106;193m',  // #ff6ac1 - Commands, code blocks
-  yellow:  '\x1b[38;2;241;250;140m',  // #f1fa8c - Warnings, highlights
-  green:   '\x1b[38;2;80;250;123m',   // #50fa7b - Success, confirmations
-  red:     '\x1b[38;2;255;99;99m',    // #ff6363 - Errors
+  purple: '\x1b[38;2;225;53;255m', // #e135ff - Claude thoughts, keywords
+  cyan: '\x1b[38;2;128;255;234m', // #80ffea - User input, functions
+  coral: '\x1b[38;2;255;106;193m', // #ff6ac1 - Commands, code blocks
+  yellow: '\x1b[38;2;241;250;140m', // #f1fa8c - Warnings, highlights
+  green: '\x1b[38;2;80;250;123m', // #50fa7b - Success, confirmations
+  red: '\x1b[38;2;255;99;99m', // #ff6363 - Errors
 
   // Neutral palette
-  fg:      '\x1b[38;2;248;248;242m',  // #f8f8f2 - Primary text
-  muted:   '\x1b[38;2;139;133;160m',  // #8b85a0 - Dim text, comments
-  bg:      '\x1b[48;2;18;16;26m',     // #12101a - Background
-  bgDark:  '\x1b[48;2;10;8;18m',      // #0a0812 - Darker background
+  fg: '\x1b[38;2;248;248;242m', // #f8f8f2 - Primary text
+  muted: '\x1b[38;2;139;133;160m', // #8b85a0 - Dim text, comments
+  bg: '\x1b[48;2;18;16;26m', // #12101a - Background
+  bgDark: '\x1b[48;2;10;8;18m', // #0a0812 - Darker background
 
   // Modifiers
-  bold:    '\x1b[1m',
-  dim:     '\x1b[2m',
-  italic:  '\x1b[3m',
-  reset:   '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  italic: '\x1b[3m',
+  reset: '\x1b[0m',
 } as const;
 ```
 
@@ -334,6 +339,7 @@ integrating long-lived branches where history matters.
 ### F1: Streaming Markdown Renderer
 
 **Requirements:**
+
 - Parse markdown incrementally as tokens stream in
 - Render to terminal with ANSI escape codes
 - Support: headings, bold, italic, code (inline + blocks), lists, links
@@ -341,6 +347,7 @@ integrating long-lived branches where history matters.
 - Handle partial tokens gracefully (e.g., incomplete code blocks)
 
 **Implementation Notes:**
+
 - Use `marked` with custom renderer for ANSI output
 - Buffer incomplete tokens (e.g., ``` without closing)
 - Shiki initialization is async—cache highlighter instance
@@ -348,6 +355,7 @@ integrating long-lived branches where history matters.
 ### F2: Claude Agent SDK Integration
 
 **Requirements:**
+
 - Wrap `query()` async generator in React hook
 - Handle all message types: system, assistant, user, result
 - Support streaming with `includePartialMessages: true`
@@ -355,13 +363,14 @@ integrating long-lived branches where history matters.
 - Configurable permission modes and tool access
 
 **Hook Interface:**
+
 ```typescript
 interface UseAgentOptions {
   prompt: string;
   model?: 'sonnet' | 'opus' | 'haiku';
-  tools?: boolean;          // Enable agent tools
+  tools?: boolean; // Enable agent tools
   permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions';
-  sessionId?: string;       // Resume session
+  sessionId?: string; // Resume session
   onToken?: (token: string) => void;
   onToolUse?: (tool: ToolUse) => Promise<ToolApproval>;
 }
@@ -380,6 +389,7 @@ interface UseAgentResult {
 ### F3: SQLite Session Storage
 
 **Schema:**
+
 ```sql
 CREATE TABLE sessions (
   id TEXT PRIMARY KEY,
@@ -411,17 +421,19 @@ CREATE VIRTUAL TABLE messages_fts USING fts5(content, content=messages);
 ### F4: Context Injection
 
 **Git Context (when in git repo):**
+
 ```typescript
 interface GitContext {
   branch: string;
   status: 'clean' | 'dirty';
   ahead: number;
   behind: number;
-  recentCommits: Array<{ hash: string; message: string; }>;
+  recentCommits: Array<{ hash: string; message: string }>;
 }
 ```
 
 **System Prompt Template:**
+
 ```
 You are q, a concise terminal assistant. You help with shell commands,
 git operations, debugging, and quick code questions.
@@ -438,6 +450,7 @@ use fenced code blocks with the shell language.
 ### F5: Configuration System
 
 **Discovery Order (cosmiconfig):**
+
 1. `q` property in `package.json`
 2. `.qrc` (JSON or YAML)
 3. `.qrc.json`, `.qrc.yaml`, `.qrc.yml`
@@ -445,17 +458,18 @@ use fenced code blocks with the shell language.
 5. `~/.config/q/config.yaml` (global)
 
 **Schema:**
+
 ```yaml
 # ~/.config/q/config.yaml
-model: sonnet                     # Default model
-maxTokens: 4096                   # Response limit
-theme: neon                       # SilkCircuit variant
+model: sonnet # Default model
+maxTokens: 4096 # Response limit
+theme: neon # SilkCircuit variant
 
 # Context injection
 context:
-  git: true                       # Include git status
-  cwd: true                       # Include working directory
-  lastCommand: false              # Include previous command output
+  git: true # Include git status
+  cwd: true # Include working directory
+  lastCommand: false # Include previous command output
 
 # Custom system prompts (extend default)
 systemPrompt: |
@@ -463,37 +477,37 @@ systemPrompt: |
 
 # Prompt aliases
 prompts:
-  explain: "Explain this error and suggest a fix:"
-  review: "Review this code for issues and improvements:"
-  commit: "Write a conventional commit message for these changes:"
-  test: "Write tests for this code:"
+  explain: 'Explain this error and suggest a fix:'
+  review: 'Review this code for issues and improvements:'
+  commit: 'Write a conventional commit message for these changes:'
+  test: 'Write tests for this code:'
 
 # Safety settings
 safety:
-  confirmDestructive: true        # Confirm rm, drop, delete, etc.
-  maxCostPerQuery: 0.50          # USD limit per query
-  blockedCommands:               # Never execute these
-    - "rm -rf /"
-    - "sudo rm"
+  confirmDestructive: true # Confirm rm, drop, delete, etc.
+  maxCostPerQuery: 0.50 # USD limit per query
+  blockedCommands: # Never execute these
+    - 'rm -rf /'
+    - 'sudo rm'
 ```
 
 ---
 
 ## Technical Stack
 
-| Component | Technology | Rationale |
-|-----------|------------|-----------|
-| Runtime | **Bun** | Fast startup, native TypeScript, built-in test runner |
-| TUI Framework | **Ink** + **ink-ui** | React patterns, mature ecosystem, good DX |
-| Agent | **@anthropic-ai/claude-agent-sdk** | Official SDK with streaming, tools, hooks |
-| Markdown | **marked** | Fast, extensible, streaming-compatible |
-| Syntax | **shiki** | VS Code quality, many themes, WASM-based |
-| Config | **cosmiconfig** | Standard config discovery, multiple formats |
-| SQLite | **bun:sqlite** | Native Bun binding, zero dependencies |
-| CLI Parser | **yargs** | Feature-rich, TypeScript support |
-| Linting | **Biome** | Fast, single tool for lint + format |
-| Testing | **Vitest** | Fast, ESM-native, good Bun compatibility |
-| Docs | **VitePress** | Fast, Vue-based, great DX |
+| Component     | Technology                         | Rationale                                             |
+| ------------- | ---------------------------------- | ----------------------------------------------------- |
+| Runtime       | **Bun**                            | Fast startup, native TypeScript, built-in test runner |
+| TUI Framework | **Ink** + **ink-ui**               | React patterns, mature ecosystem, good DX             |
+| Agent         | **@anthropic-ai/claude-agent-sdk** | Official SDK with streaming, tools, hooks             |
+| Markdown      | **marked**                         | Fast, extensible, streaming-compatible                |
+| Syntax        | **shiki**                          | VS Code quality, many themes, WASM-based              |
+| Config        | **cosmiconfig**                    | Standard config discovery, multiple formats           |
+| SQLite        | **bun:sqlite**                     | Native Bun binding, zero dependencies                 |
+| CLI Parser    | **yargs**                          | Feature-rich, TypeScript support                      |
+| Linting       | **Biome**                          | Fast, single tool for lint + format                   |
+| Testing       | **Vitest**                         | Fast, ESM-native, good Bun compatibility              |
+| Docs          | **VitePress**                      | Fast, Vue-based, great DX                             |
 
 ### Dependencies
 
@@ -642,13 +656,13 @@ The following patterns are blocked by default:
 
 ```typescript
 const BLOCKED_COMMANDS = [
-  /rm\s+-rf\s+[\/~]/,           // rm -rf / or ~
-  /sudo\s+rm/,                   // sudo rm anything
-  />\s*\/dev\/sd[a-z]/,          // write to block devices
-  /mkfs\./,                      // format filesystems
-  /dd\s+.*of=\/dev/,             // dd to devices
-  /:(){.*};:/,                   // fork bombs
-  /chmod\s+-R\s+777\s+\//,       // chmod 777 on root
+  /rm\s+-rf\s+[\/~]/, // rm -rf / or ~
+  /sudo\s+rm/, // sudo rm anything
+  />\s*\/dev\/sd[a-z]/, // write to block devices
+  /mkfs\./, // format filesystems
+  /dd\s+.*of=\/dev/, // dd to devices
+  /:(){.*};:/, // fork bombs
+  /chmod\s+-R\s+777\s+\//, // chmod 777 on root
 ];
 ```
 
@@ -715,16 +729,17 @@ brew install q
 
 ### Size Targets
 
-| Distribution | Target Size |
-|--------------|-------------|
-| npm package  | < 2 MB |
-| Compiled binary | < 50 MB |
+| Distribution    | Target Size |
+| --------------- | ----------- |
+| npm package     | < 2 MB      |
+| Compiled binary | < 50 MB     |
 
 ---
 
 ## Future Roadmap
 
 ### Phase 1: MVP (v0.1)
+
 - [ ] Project scaffolding
 - [ ] Single-shot query mode
 - [ ] Pipe mode
@@ -732,24 +747,28 @@ brew install q
 - [ ] Token/cost display
 
 ### Phase 2: Polish (v0.2)
+
 - [ ] Syntax highlighting
 - [ ] Interactive TUI mode
 - [ ] Session storage
 - [ ] Configuration system
 
 ### Phase 3: Agent (v0.3)
+
 - [ ] Execute mode with tools
 - [ ] Command approval UI
 - [ ] Audit logging
 - [ ] Safety controls
 
 ### Phase 4: Integration (v0.4)
+
 - [ ] Shell plugin (zsh/bash)
 - [ ] Git context awareness
 - [ ] Last command context
 - [ ] Hotkey support
 
 ### Phase 5: Distribution (v1.0)
+
 - [ ] Compiled binaries
 - [ ] Homebrew formula
 - [ ] Full documentation
@@ -766,4 +785,4 @@ brew install q
 
 ---
 
-*This specification is a living document. Updates will be tracked in git.*
+_This specification is a living document. Updates will be tracked in git._
