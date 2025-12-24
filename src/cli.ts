@@ -5,6 +5,8 @@
  * Elegant CLI agent for quick queries with Claude.
  */
 
+import * as readline from 'node:readline';
+import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import type { SDKAssistantMessage, SDKResultMessage } from './lib/agent.js';
@@ -14,6 +16,9 @@ import { loadQConfig } from './lib/config.js';
 import { render as renderMarkdown } from './lib/markdown.js';
 import { AUTO_APPROVED_TOOLS, INTERACTIVE_TOOLS, SYSTEM_PROMPT } from './lib/prompt.js';
 import type { CliArgs, Config, Mode } from './types.js';
+
+/** Tools that require explicit user approval */
+const APPROVAL_REQUIRED_TOOLS = ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
 
 const VERSION = '0.1.0';
 
@@ -213,6 +218,7 @@ function buildQueryOptions(
     allowedTools?: string[];
     includePartialMessages?: boolean;
     permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+    canUseTool?: (toolName: string, input: Record<string, unknown>) => Promise<PermissionResult>;
   } = {}
 ) {
   const opts: Parameters<typeof query>[1] = {};
@@ -237,6 +243,9 @@ function buildQueryOptions(
   }
   if (extras.permissionMode !== undefined) {
     opts.permissionMode = extras.permissionMode;
+  }
+  if (extras.canUseTool) {
+    opts.canUseTool = extras.canUseTool;
   }
 
   return opts;
@@ -371,6 +380,58 @@ async function runInteractive(args: CliArgs, _config: Config): Promise<void> {
 }
 
 /**
+ * Prompt user for tool approval via CLI
+ */
+async function promptToolApproval(
+  toolName: string,
+  input: Record<string, unknown>
+): Promise<{ approved: boolean; message?: string }> {
+  // Format the tool info for display
+  const toolDisplay = color(toolName, 'coral', 'bold');
+  let inputDisplay = '';
+
+  switch (toolName) {
+    case 'Bash':
+      inputDisplay = `\n    ${semantic.muted('$')} ${color(String(input.command ?? ''), 'cyan')}`;
+      break;
+    case 'Write':
+    case 'Edit':
+    case 'MultiEdit':
+      inputDisplay = `\n    ${semantic.muted('file:')} ${color(String(input.file_path ?? ''), 'cyan')}`;
+      break;
+    default:
+      inputDisplay = `\n    ${semantic.muted(JSON.stringify(input, null, 2).split('\n').join('\n    '))}`;
+  }
+
+  console.log();
+  console.log(`${status.warning} ${toolDisplay} wants to execute:${inputDisplay}`);
+  console.log();
+
+  // Create readline interface for user input
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise<{ approved: boolean; message?: string }>(resolve => {
+    rl.question(
+      `${semantic.muted('Allow?')} ${color('[y]es', 'green')} / ${color('[n]o', 'red')} / ${color('[a]lways', 'yellow')}: `,
+      answer => {
+        rl.close();
+        const lower = answer.toLowerCase().trim();
+        if (lower === 'y' || lower === 'yes' || lower === '') {
+          return resolve({ approved: true });
+        }
+        if (lower === 'a' || lower === 'always') {
+          return resolve({ approved: true, message: 'always' });
+        }
+        return resolve({ approved: false, message: 'User denied' });
+      }
+    );
+  });
+}
+
+/**
  * Format a tool call for display
  */
 function formatToolCall(toolName: string, input: Record<string, unknown>): string {
@@ -421,15 +482,46 @@ async function runAgent(task: string, args: CliArgs, _config: Config): Promise<v
   let toolCount = 0;
   let hasShownTools = false;
   const seenTools = new Set<string>();
+  const alwaysApprovedTools = new Set<string>();
+
+  // Custom permission handler for dangerous tools
+  const canUseTool = async (
+    toolName: string,
+    input: Record<string, unknown>
+  ): Promise<PermissionResult> => {
+    // Auto-approve read-only tools
+    if (AUTO_APPROVED_TOOLS.includes(toolName)) {
+      return { behavior: 'allow', updatedInput: input };
+    }
+
+    // Check if user said "always" for this tool
+    if (alwaysApprovedTools.has(toolName)) {
+      return { behavior: 'allow', updatedInput: input };
+    }
+
+    // Prompt for approval-required tools
+    if (APPROVAL_REQUIRED_TOOLS.includes(toolName)) {
+      const result = await promptToolApproval(toolName, input);
+      if (result.approved) {
+        if (result.message === 'always') {
+          alwaysApprovedTools.add(toolName);
+        }
+        return { behavior: 'allow', updatedInput: input };
+      }
+      return { behavior: 'deny', message: result.message ?? 'User denied' };
+    }
+
+    // Default: allow unknown tools (SDK handles them)
+    return { behavior: 'allow', updatedInput: input };
+  };
 
   try {
-    // Agent mode - enable common tools, auto-approve read-only ones
+    // Agent mode - enable common tools with custom permission handler
     const opts = buildQueryOptions(args, {
       systemPrompt: SYSTEM_PROMPT,
-      allowedTools: AUTO_APPROVED_TOOLS,
       tools: [...INTERACTIVE_TOOLS, 'Write', 'Edit'],
       includePartialMessages: true,
-      permissionMode: 'default', // Require approval for write ops
+      canUseTool,
     });
 
     for await (const message of streamQuery(task, opts)) {
