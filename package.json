@@ -14,7 +14,7 @@
     "dev": "bun run --watch src/cli.ts",
     "build": "bun run build.ts",
     "build:compile": "bun build src/cli.ts --compile --outfile q --external @anthropic-ai/claude-agent-sdk",
-    "check": "bun run typecheck && bun run lint:all",
+    "check": "bun run typecheck && bun run lint:all && bun test",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "lint:all": "biome check .",

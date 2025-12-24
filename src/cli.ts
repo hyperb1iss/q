@@ -41,7 +41,8 @@ function parseArgs(): CliArgs {
     .option('execute', {
       alias: 'x',
       type: 'boolean',
-      describe: 'Enable agent tools (Read, Glob, Grep, Bash)',
+      describe:
+        'Agent mode with tools (Read, Glob, Grep auto-approved; Bash, Write, Edit require confirmation)',
     })
     .option('resume', {
       alias: 'r',
@@ -72,7 +73,8 @@ function parseArgs(): CliArgs {
     .example('$0 "what does this error mean"', 'Quick query')
     .example('cat error.log | $0 "explain this"', 'Pipe mode')
     .example('$0 -i', 'Interactive mode')
-    .example('$0 -x "find all TODO comments"', 'Agent mode')
+    .example('$0 -x "find all TODO comments"', 'Agent mode (read-only)')
+    .example('$0 -x "refactor to use async/await"', 'Agent mode (with edits)')
     .version(VERSION)
     .help()
     .parseSync() as CliArgs;
@@ -194,7 +196,12 @@ async function main(): Promise<void> {
  */
 function buildQueryOptions(
   args: CliArgs,
-  extras: { tools?: string[]; allowedTools?: string[]; includePartialMessages?: boolean } = {}
+  extras: {
+    tools?: string[];
+    allowedTools?: string[];
+    includePartialMessages?: boolean;
+    permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+  } = {}
 ) {
   const opts: Parameters<typeof query>[1] = {};
 
@@ -212,6 +219,9 @@ function buildQueryOptions(
   }
   if (extras.includePartialMessages !== undefined) {
     opts.includePartialMessages = extras.includePartialMessages;
+  }
+  if (extras.permissionMode !== undefined) {
+    opts.permissionMode = extras.permissionMode;
   }
 
   return opts;
@@ -325,61 +335,134 @@ async function runQuery(prompt: string, args: CliArgs): Promise<void> {
 /**
  * Run interactive TUI mode
  */
-async function runInteractive(_args: CliArgs): Promise<void> {
-  // TODO: Implement with Ink
-  console.log(semantic.muted('Interactive mode - implementation pending'));
-  console.log();
-  console.log(
-    semantic.warning(
-      'The Ink TUI is not yet implemented.\n' +
-        'This will open a full-screen conversation interface.'
-    )
-  );
+async function runInteractive(args: CliArgs): Promise<void> {
+  const { render } = await import('ink');
+  const React = await import('react');
+  const { App } = await import('./components/index.js');
+
+  const props: { model?: string } = {};
+  if (args.model) {
+    const modelId = MODEL_MAP[args.model];
+    if (modelId) {
+      props.model = modelId;
+    }
+  }
+
+  render(React.createElement(App, props));
 }
 
 /**
- * Run agent mode with tools
+ * Format a tool call for display
+ */
+function formatToolCall(toolName: string, input: Record<string, unknown>): string {
+  const toolColor = color(toolName, 'coral', 'bold');
+
+  // Format input based on tool type
+  let inputSummary = '';
+  switch (toolName) {
+    case 'Read':
+      inputSummary = input.file_path as string;
+      break;
+    case 'Glob':
+      inputSummary = `${input.pattern}${input.path ? ` in ${input.path}` : ''}`;
+      break;
+    case 'Grep':
+      inputSummary = `"${input.pattern}"${input.path ? ` in ${input.path}` : ''}`;
+      break;
+    case 'Bash':
+      inputSummary =
+        (input.command as string).slice(0, 60) +
+        ((input.command as string).length > 60 ? '...' : '');
+      break;
+    case 'Write':
+    case 'Edit':
+      inputSummary = input.file_path as string;
+      break;
+    default:
+      inputSummary = JSON.stringify(input).slice(0, 60);
+  }
+
+  return `${color('⚡', 'yellow')} ${toolColor} ${semantic.muted(inputSummary)}`;
+}
+
+/**
+ * Run agent mode with tools (streaming)
  */
 async function runAgent(task: string, args: CliArgs): Promise<void> {
   const quiet = args.quiet ?? false;
 
   if (!quiet) {
-    console.log(color(`${status.pending} Agent mode: `, 'purple') + task);
+    console.log(color(`${status.active} Agent mode`, 'purple', 'bold'));
+    console.log(semantic.muted('─'.repeat(40)));
     console.log();
   }
 
+  let lastText = '';
+  let startedOutput = false;
+  let toolCount = 0;
+
   try {
-    // Agent mode - enable common tools with approval required
+    // Agent mode - enable common tools, auto-approve read-only ones
     const opts = buildQueryOptions(args, {
-      allowedTools: ['Read', 'Glob', 'Grep'],
+      allowedTools: ['Read', 'Glob', 'Grep'], // Auto-approved (read-only)
+      tools: ['Read', 'Glob', 'Grep', 'Bash', 'Write', 'Edit'], // Available tools
+      includePartialMessages: true,
+      permissionMode: 'default', // Require approval for write ops
     });
-    opts.permissionMode = 'default'; // Require approval for tool use
 
-    const result = await query(task, opts);
+    for await (const message of streamQuery(task, opts)) {
+      // Handle tool use
+      if (message.type === 'assistant') {
+        const assistantMsg = message as SDKAssistantMessage;
+        for (const block of assistantMsg.message.content) {
+          // Show tool calls
+          if ('type' in block && block.type === 'tool_use') {
+            const toolBlock = block as {
+              type: 'tool_use';
+              name: string;
+              input: Record<string, unknown>;
+            };
+            if (!quiet) {
+              console.log(formatToolCall(toolBlock.name, toolBlock.input));
+            }
+            toolCount++;
+          }
 
-    if (result.success) {
-      console.log(result.response);
+          // Stream text output
+          if ('text' in block && block.text && block.text !== lastText) {
+            if (!startedOutput && !quiet) {
+              console.log();
+              startedOutput = true;
+            }
+            const newText = block.text.slice(lastText.length);
+            process.stdout.write(newText);
+            lastText = block.text;
+          }
+        }
+      }
 
-      if (!quiet) {
-        const tokens = formatTokens(result.tokens.input, result.tokens.output);
-        const cost = formatCost(result.cost);
+      // Handle result
+      if (message.type === 'result' && !quiet) {
+        const result = message as SDKResultMessage;
+        const tokens = formatTokens(result.usage.input_tokens, result.usage.output_tokens);
+        const cost = formatCost(result.total_cost_usd);
+
+        if (startedOutput) {
+          console.log();
+        }
         console.log();
+        console.log(semantic.muted('─'.repeat(40)));
         console.log(
           semantic.muted(
-            `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'} | ${result.numTurns} turns`
+            `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'} | ${result.num_turns} turns | ${toolCount} tools`
           )
         );
       }
-    } else {
-      console.error(semantic.error(`Error: ${result.errorType}`));
-      if (result.errors) {
-        for (const err of result.errors) {
-          console.error(semantic.error(`  ${err}`));
-        }
-      }
-      process.exit(1);
     }
   } catch (error) {
+    if (startedOutput) {
+      console.log();
+    }
     console.error(
       semantic.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
     );

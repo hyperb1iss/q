@@ -9,6 +9,8 @@ const result = await Bun.build({
   external: [
     // SDK spawns Claude Code as subprocess - can't be bundled
     '@anthropic-ai/claude-agent-sdk',
+    // Ink has optional devtools dependency
+    'react-devtools-core',
   ],
 });
 
