@@ -62,6 +62,8 @@ export const status = {
   info: color('ℹ', 'cyan'),
   pending: color('○', 'muted'),
   active: color('●', 'purple'),
+  tool: color('▸', 'coral'),
+  thinking: color('◆', 'purple'),
 } as const;
 
 /**

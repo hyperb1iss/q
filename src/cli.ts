@@ -12,6 +12,7 @@ import { query, streamQuery } from './lib/agent.js';
 import { color, semantic, status } from './lib/colors.js';
 import { loadQConfig } from './lib/config.js';
 import { render as renderMarkdown } from './lib/markdown.js';
+import { AUTO_APPROVED_TOOLS, INTERACTIVE_TOOLS, SYSTEM_PROMPT } from './lib/prompt.js';
 import type { CliArgs, Config, Mode } from './types.js';
 
 const VERSION = '0.1.0';
@@ -207,6 +208,7 @@ async function main(): Promise<void> {
 function buildQueryOptions(
   args: CliArgs,
   extras: {
+    systemPrompt?: string;
     tools?: string[];
     allowedTools?: string[];
     includePartialMessages?: boolean;
@@ -220,6 +222,9 @@ function buildQueryOptions(
     if (modelId) {
       opts.model = modelId;
     }
+  }
+  if (extras.systemPrompt) {
+    opts.systemPrompt = extras.systemPrompt;
   }
   if (extras.tools) {
     opts.tools = extras.tools;
@@ -254,7 +259,11 @@ async function runQuery(prompt: string, args: CliArgs, _config: Config): Promise
     if (args.stream) {
       // Streaming mode - show output as it arrives
       let lastText = '';
-      const opts = buildQueryOptions(args, { tools: [], includePartialMessages: true });
+      const opts = buildQueryOptions(args, {
+        systemPrompt: SYSTEM_PROMPT,
+        tools: [],
+        includePartialMessages: true,
+      });
 
       for await (const message of streamQuery(prompt, opts)) {
         // Handle assistant text
@@ -296,7 +305,7 @@ async function runQuery(prompt: string, args: CliArgs, _config: Config): Promise
       }
     } else {
       // Non-streaming mode - wait for complete response
-      const opts = buildQueryOptions(args, { tools: [] });
+      const opts = buildQueryOptions(args, { systemPrompt: SYSTEM_PROMPT, tools: [] });
       const result = await query(prompt, opts);
 
       // Clear thinking indicator
@@ -392,7 +401,7 @@ function formatToolCall(toolName: string, input: Record<string, unknown>): strin
       inputSummary = JSON.stringify(input).slice(0, 60);
   }
 
-  return `${color('⚡', 'yellow')} ${toolColor} ${semantic.muted(inputSummary)}`;
+  return `  ${status.tool} ${toolColor} ${semantic.muted(inputSummary)}`;
 }
 
 /**
@@ -402,20 +411,21 @@ async function runAgent(task: string, args: CliArgs, _config: Config): Promise<v
   const quiet = args.quiet ?? false;
 
   if (!quiet) {
-    console.log(color(`${status.active} Agent mode`, 'purple', 'bold'));
-    console.log(semantic.muted('─'.repeat(40)));
     console.log();
+    console.log(color(`${status.active} Agent mode`, 'purple', 'bold'));
+    console.log(semantic.muted('─'.repeat(60)));
   }
 
-  let lastText = '';
-  let startedOutput = false;
+  let fullText = '';
   let toolCount = 0;
+  const seenTools = new Set<string>();
 
   try {
     // Agent mode - enable common tools, auto-approve read-only ones
     const opts = buildQueryOptions(args, {
-      allowedTools: ['Read', 'Glob', 'Grep'], // Auto-approved (read-only)
-      tools: ['Read', 'Glob', 'Grep', 'Bash', 'Write', 'Edit'], // Available tools
+      systemPrompt: SYSTEM_PROMPT,
+      allowedTools: AUTO_APPROVED_TOOLS,
+      tools: [...INTERACTIVE_TOOLS, 'Write', 'Edit'],
       includePartialMessages: true,
       permissionMode: 'default', // Require approval for write ops
     });
@@ -432,47 +442,50 @@ async function runAgent(task: string, args: CliArgs, _config: Config): Promise<v
               name: string;
               input: Record<string, unknown>;
             };
-            if (!quiet) {
-              console.log(formatToolCall(toolBlock.name, toolBlock.input));
+            // Dedupe tool calls by name+input
+            const toolKey = `${toolBlock.name}:${JSON.stringify(toolBlock.input)}`;
+            if (!seenTools.has(toolKey)) {
+              seenTools.add(toolKey);
+              if (!quiet) {
+                console.log(formatToolCall(toolBlock.name, toolBlock.input));
+              }
+              toolCount++;
             }
-            toolCount++;
           }
 
-          // Stream text output
-          if ('text' in block && block.text && block.text !== lastText) {
-            if (!startedOutput && !quiet) {
-              console.log();
-              startedOutput = true;
-            }
-            const newText = block.text.slice(lastText.length);
-            process.stdout.write(newText);
-            lastText = block.text;
+          // Buffer text (we'll render markdown at the end)
+          if ('text' in block && block.text) {
+            fullText = block.text;
           }
         }
       }
 
-      // Handle result
-      if (message.type === 'result' && !quiet) {
+      // Handle result - render markdown and show stats
+      if (message.type === 'result') {
         const result = message as SDKResultMessage;
-        const tokens = formatTokens(result.usage.input_tokens, result.usage.output_tokens);
-        const cost = formatCost(result.total_cost_usd);
 
-        if (startedOutput) {
+        // Render the buffered text as markdown
+        if (fullText && !quiet) {
           console.log();
+          const rendered = await renderMarkdown(fullText);
+          console.log(rendered);
         }
-        console.log();
-        console.log(semantic.muted('─'.repeat(40)));
-        console.log(
-          semantic.muted(
-            `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'} | ${result.num_turns} turns | ${toolCount} tools`
-          )
-        );
+
+        if (!quiet) {
+          const tokens = formatTokens(result.usage.input_tokens, result.usage.output_tokens);
+          const cost = formatCost(result.total_cost_usd);
+
+          console.log();
+          console.log(semantic.muted('─'.repeat(60)));
+          console.log(
+            semantic.muted(
+              `${status.success} ${tokens} tokens │ ${cost} │ ${args.model ?? 'sonnet'} │ ${result.num_turns} turns │ ${toolCount} tools`
+            )
+          );
+        }
       }
     }
   } catch (error) {
-    if (startedOutput) {
-      console.log();
-    }
     console.error(
       semantic.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
     );

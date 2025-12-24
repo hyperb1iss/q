@@ -4,19 +4,41 @@
 
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import Spinner from 'ink-spinner';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SDKAssistantMessage, SDKResultMessage } from '../lib/agent.js';
 import { streamQuery } from '../lib/agent.js';
 import { renderSync } from '../lib/markdown.js';
+import { AUTO_APPROVED_TOOLS, INTERACTIVE_TOOLS, SYSTEM_PROMPT } from '../lib/prompt.js';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
+interface ToolCall {
+  name: string;
+  input: string;
+}
+
 interface AppProps {
   initialPrompt?: string;
   model?: string;
+}
+
+/** Format tool input for display */
+function formatToolInput(name: string, input: Record<string, unknown>): string {
+  switch (name) {
+    case 'Read':
+      return String(input.file_path ?? '');
+    case 'Glob':
+      return `${input.pattern}${input.path ? ` in ${input.path}` : ''}`;
+    case 'Grep':
+      return `"${input.pattern}"${input.path ? ` in ${input.path}` : ''}`;
+    case 'Bash':
+      return String(input.command ?? '').slice(0, 50);
+    default:
+      return JSON.stringify(input).slice(0, 40);
+  }
 }
 
 export function App({ initialPrompt, model }: AppProps) {
@@ -26,26 +48,41 @@ export function App({ initialPrompt, model }: AppProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingText, setStreamingText] = useState('');
+  const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [stats, setStats] = useState<{ tokens: number; cost: number } | null>(null);
 
   const terminalHeight = stdout?.rows ?? 24;
+  const terminalWidth = stdout?.columns ?? 80;
+
+  // Calculate available height for messages (minus header, input, status)
+  const messageAreaHeight = terminalHeight - 6;
+
+  // Get visible messages (simple tail - show last few)
+  const visibleMessages = useMemo(() => {
+    // Estimate: each message takes ~3 lines on average
+    const maxMessages = Math.max(2, Math.floor(messageAreaHeight / 4));
+    return messages.slice(-maxMessages);
+  }, [messages, messageAreaHeight]);
 
   // Handle query submission
   const submitQuery = useCallback(
     async (prompt: string) => {
       if (!prompt.trim() || isLoading) return;
 
-      // Add user message
       setMessages(prev => [...prev, { role: 'user', content: prompt }]);
       setInput('');
       setIsLoading(true);
       setStreamingText('');
+      setToolCalls([]);
       setStats(null);
 
       try {
         let fullText = '';
         const opts: Parameters<typeof streamQuery>[1] = {
-          tools: [],
+          systemPrompt: SYSTEM_PROMPT,
+          tools: INTERACTIVE_TOOLS,
+          allowedTools: AUTO_APPROVED_TOOLS,
+          permissionMode: 'default',
           includePartialMessages: true,
         };
         if (model) {
@@ -56,6 +93,34 @@ export function App({ initialPrompt, model }: AppProps) {
           if (message.type === 'assistant') {
             const assistantMsg = message as SDKAssistantMessage;
             for (const block of assistantMsg.message.content) {
+              // Handle tool calls
+              if ('type' in block && block.type === 'tool_use') {
+                const toolBlock = block as {
+                  type: 'tool_use';
+                  name: string;
+                  input: Record<string, unknown>;
+                };
+                setToolCalls(prev => {
+                  // Avoid duplicates
+                  if (
+                    prev.some(
+                      t =>
+                        t.name === toolBlock.name &&
+                        t.input === formatToolInput(toolBlock.name, toolBlock.input)
+                    )
+                  ) {
+                    return prev;
+                  }
+                  return [
+                    ...prev,
+                    {
+                      name: toolBlock.name,
+                      input: formatToolInput(toolBlock.name, toolBlock.input),
+                    },
+                  ];
+                });
+              }
+              // Handle text
               if ('text' in block && block.text) {
                 fullText = block.text;
                 setStreamingText(fullText);
@@ -72,9 +137,9 @@ export function App({ initialPrompt, model }: AppProps) {
           }
         }
 
-        // Add assistant message
         setMessages(prev => [...prev, { role: 'assistant', content: fullText }]);
         setStreamingText('');
+        setToolCalls([]);
       } catch (error) {
         setMessages(prev => [
           ...prev,
@@ -90,22 +155,18 @@ export function App({ initialPrompt, model }: AppProps) {
     [isLoading, model]
   );
 
-  // Handle initial prompt
   useEffect(() => {
     if (initialPrompt) {
       void submitQuery(initialPrompt);
     }
   }, [initialPrompt, submitQuery]);
 
-  // Handle keyboard input
   useInput((ch, key) => {
     if (key.escape || (key.ctrl && ch === 'c')) {
       exit();
       return;
     }
-
     if (isLoading) return;
-
     if (key.return) {
       void submitQuery(input);
     } else if (key.backspace || key.delete) {
@@ -118,65 +179,92 @@ export function App({ initialPrompt, model }: AppProps) {
   return (
     <Box flexDirection="column" height={terminalHeight}>
       {/* Header */}
-      <Box paddingX={1} borderStyle="single" borderColor="magenta">
+      <Box paddingX={1} borderStyle="round" borderColor="magenta">
         <Text color="magenta" bold>
           q
         </Text>
-        <Text color="gray"> - The Shell's Quiet Companion</Text>
+        <Text color="gray"> · </Text>
+        <Text color="gray">{model ?? 'sonnet'}</Text>
         <Box flexGrow={1} />
         {stats && (
-          <Text color="gray">
-            {stats.tokens} tokens | ${stats.cost.toFixed(4)}
+          <Text color="gray" dimColor>
+            {stats.tokens}t · ${stats.cost.toFixed(4)}
           </Text>
         )}
       </Box>
 
-      {/* Messages */}
+      {/* Messages area */}
       <Box flexDirection="column" flexGrow={1} paddingX={1} overflow="hidden">
-        {messages.map((msg, i) => (
-          <Box key={i} flexDirection="column" marginY={1}>
-            <Text color={msg.role === 'user' ? 'cyan' : 'green'} bold>
+        {visibleMessages.map((msg, i) => (
+          <Box key={`${i}-${msg.role}`} flexDirection="row" marginTop={i > 0 ? 1 : 0}>
+            <Text color={msg.role === 'user' ? 'cyan' : 'green'}>
               {msg.role === 'user' ? '› ' : '◆ '}
             </Text>
-            <Box marginLeft={2}>
-              <Text>{msg.role === 'assistant' ? renderSync(msg.content) : msg.content}</Text>
+            <Box flexDirection="column" flexShrink={1} width={terminalWidth - 6}>
+              <Text wrap="wrap">
+                {msg.role === 'assistant' ? renderSync(msg.content) : msg.content}
+              </Text>
             </Box>
           </Box>
         ))}
 
+        {/* Tool calls */}
+        {toolCalls.length > 0 && (
+          <Box flexDirection="column" marginTop={1}>
+            {toolCalls.slice(-3).map((tool, i) => (
+              <Box key={`${tool.name}-${i}`}>
+                <Text color="yellow">⚡ </Text>
+                <Text color="magenta" bold>
+                  {tool.name}
+                </Text>
+                <Text color="gray" dimColor>
+                  {' '}
+                  {tool.input}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        )}
+
         {/* Streaming output */}
         {streamingText && (
-          <Box flexDirection="column" marginY={1}>
-            <Text color="green" bold>
-              ◆{' '}
-            </Text>
-            <Box marginLeft={2}>
-              <Text>{streamingText}</Text>
+          <Box flexDirection="row" marginTop={1}>
+            <Text color="green">◆ </Text>
+            <Box flexShrink={1} width={terminalWidth - 6}>
+              <Text wrap="wrap">{streamingText}</Text>
             </Box>
           </Box>
         )}
 
         {/* Loading indicator */}
-        {isLoading && !streamingText && (
-          <Box marginY={1}>
+        {isLoading && !streamingText && toolCalls.length === 0 && (
+          <Box marginTop={1}>
             <Text color="magenta">
               <Spinner type="dots" />
             </Text>
-            <Text color="gray"> Thinking...</Text>
+            <Text color="gray"> thinking...</Text>
           </Box>
         )}
       </Box>
 
       {/* Input */}
-      <Box paddingX={1} borderStyle="single" borderColor={isLoading ? 'gray' : 'cyan'}>
-        <Text color={isLoading ? 'gray' : 'cyan'}>{'> '}</Text>
+      <Box paddingX={1} borderStyle="round" borderColor={isLoading ? 'gray' : 'cyan'}>
+        <Text color={isLoading ? 'gray' : 'cyan'}>{'❯ '}</Text>
         <Text>{input}</Text>
-        {!isLoading && <Text color="cyan">▌</Text>}
+        {!isLoading && <Text color="cyan">▎</Text>}
       </Box>
 
       {/* Status bar */}
       <Box paddingX={1}>
-        <Text color="gray">ESC to quit | Enter to send</Text>
+        <Text color="gray" dimColor>
+          esc quit · enter send
+        </Text>
+        {messages.length > visibleMessages.length && (
+          <Text color="gray" dimColor>
+            {' '}
+            · {messages.length - visibleMessages.length} older
+          </Text>
+        )}
       </Box>
     </Box>
   );
