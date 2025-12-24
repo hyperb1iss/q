@@ -1,29 +1,72 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "organizeImports": {
-    "enabled": true
+  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
+  "files": {
+    "includes": ["src/**", "*.json", "*.ts"],
+    "ignoreUnknown": true
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
   },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
+      "performance": {
+        "noAccumulatingSpread": "error",
+        "noBarrelFile": "off",
+        "noReExportAll": "off"
+      },
       "complexity": {
         "noBannedTypes": "error",
-        "noUselessTypeConstraint": "error"
+        "noUselessTypeConstraint": "error",
+        "noExcessiveCognitiveComplexity": "off"
       },
       "correctness": {
         "noUnusedVariables": "error",
         "noUnusedImports": "error",
-        "useExhaustiveDependencies": "warn"
+        "noUnusedFunctionParameters": "warn",
+        "noUnusedPrivateClassMembers": "error",
+        "useExhaustiveDependencies": "warn",
+        "noUndeclaredDependencies": "error",
+        "noUndeclaredVariables": "error"
       },
       "style": {
-        "noNonNullAssertion": "warn",
+        "noNonNullAssertion": "error",
         "useConst": "error",
-        "useImportType": "error"
+        "useImportType": "error",
+        "useExportType": "error",
+        "useEnumInitializers": "error",
+        "noInferrableTypes": "error",
+        "useShorthandFunctionType": "error",
+        "useConsistentArrayType": {
+          "level": "error",
+          "options": { "syntax": "shorthand" }
+        },
+        "useNamingConvention": "off"
       },
       "suspicious": {
-        "noExplicitAny": "warn",
-        "noConfusingVoidType": "error"
+        "noExplicitAny": "error",
+        "noConfusingVoidType": "error",
+        "noArrayIndexKey": "off",
+        "noAssignInExpressions": "error",
+        "noAsyncPromiseExecutor": "error",
+        "noDoubleEquals": "error",
+        "noEmptyBlockStatements": "warn",
+        "noMisleadingInstantiator": "error",
+        "noUnsafeDeclarationMerging": "error",
+        "useAwait": "off"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "error"
+      },
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "noShadow": "off"
       }
     }
   },
@@ -39,8 +82,5 @@
       "trailingCommas": "es5",
       "arrowParentheses": "asNeeded"
     }
-  },
-  "files": {
-    "ignore": ["dist", "node_modules", "docs/.vitepress/cache", "docs/.vitepress/dist"]
   }
 }

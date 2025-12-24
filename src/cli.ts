@@ -172,7 +172,8 @@ async function runInteractive(_args: CliArgs): Promise<void> {
   console.log();
   console.log(
     semantic.warning(
-      'The Ink TUI is not yet implemented.\n' + 'This will open a full-screen conversation interface.'
+      'The Ink TUI is not yet implemented.\n' +
+        'This will open a full-screen conversation interface.'
     )
   );
 }
