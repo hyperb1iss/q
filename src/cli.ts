@@ -12,7 +12,7 @@ import * as readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { runAgent, runInteractive, runQuery, showSessions } from './commands/index.js';
+import { runAgent, runInteractive, runPipe, runQuery, showSessions } from './commands/index.js';
 import { color, semantic, setColorMode } from './lib/colors.js';
 import { loadQConfig } from './lib/config.js';
 import { getLastSession, getSession } from './lib/storage.js';
@@ -195,6 +195,14 @@ async function main(): Promise<void> {
   const args = parseArgs();
   const mode = detectMode(args);
 
+  // When stdout is piped, auto-enable clean output mode
+  const stdoutIsPiped = !process.stdout.isTTY;
+  if (stdoutIsPiped) {
+    args.quiet = true;
+    args.raw = true;
+    args.color = 'never';
+  }
+
   // Set color mode early (before any output)
   if (args.color) {
     setColorMode(args.color);
@@ -291,23 +299,20 @@ async function main(): Promise<void> {
         console.error(semantic.error(validation.message));
         process.exit(1);
       }
-      await runQuery(args.query, args, config);
+      await runQuery(args.query, args, config, 'query');
       break;
     }
 
     case 'pipe': {
       const stdin = await readStdin();
-      const prompt = args.query ?? 'Explain this:';
-      const fullPrompt = `<context>\n${stdin.trim()}\n</context>\n\n${prompt}`;
+      const prompt = args.query ?? 'Analyze this:';
+      const fullPrompt = `<piped_input>\n${stdin.trim()}\n</piped_input>\n\n${prompt}`;
       const validation = validateInputSize(fullPrompt, maxInputSize);
       if (!validation.valid) {
         console.error(semantic.error(validation.message));
-        console.log(
-          semantic.muted('Tip: Reduce input size or increase safety.maxInputSize in config')
-        );
         process.exit(1);
       }
-      await runQuery(fullPrompt, args, config);
+      await runPipe(fullPrompt, args, config);
       break;
     }
 

@@ -7,14 +7,20 @@ import { query, streamQuery } from '../lib/agent.js';
 import { semantic, status } from '../lib/colors.js';
 import { formatCost, formatTokens } from '../lib/format.js';
 import { render as renderMarkdown } from '../lib/markdown.js';
-import { buildSystemPrompt, getEnvironmentContext } from '../lib/prompt.js';
+import { buildSystemPrompt, getEnvironmentContext, type PromptMode } from '../lib/prompt.js';
 import type { CliArgs, Config } from '../types.js';
 import { buildQueryOptions } from './shared.js';
 
 /**
  * Run a single query with streaming
+ * @param promptMode - 'query' for direct questions, 'pipe' for pipeline processing
  */
-export async function runQuery(prompt: string, args: CliArgs, _config: Config): Promise<void> {
+export async function runQuery(
+  prompt: string,
+  args: CliArgs,
+  _config: Config,
+  promptMode: PromptMode = 'query'
+): Promise<void> {
   const quiet = args.quiet ?? false;
 
   // Show thinking indicator
@@ -25,7 +31,7 @@ export async function runQuery(prompt: string, args: CliArgs, _config: Config): 
   try {
     if (args.stream) {
       // Streaming mode - use SDK's clean result.result field
-      const systemPrompt = buildSystemPrompt(await getEnvironmentContext());
+      const systemPrompt = buildSystemPrompt(await getEnvironmentContext(), promptMode);
       const opts = buildQueryOptions(args, {
         systemPrompt,
         tools: [],
@@ -76,7 +82,7 @@ export async function runQuery(prompt: string, args: CliArgs, _config: Config): 
       }
     } else {
       // Non-streaming mode - wait for complete response
-      const systemPrompt = buildSystemPrompt(await getEnvironmentContext());
+      const systemPrompt = buildSystemPrompt(await getEnvironmentContext(), promptMode);
       const opts = buildQueryOptions(args, { systemPrompt, tools: [] });
       const result = await query(prompt, opts);
 

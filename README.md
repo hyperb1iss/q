@@ -42,7 +42,7 @@ That's it. You're running.
 | Mode            | Trigger                   | What It Does                           |
 | --------------- | ------------------------- | -------------------------------------- |
 | **Query**       | `q "question"`            | Quick answer, streamed to terminal     |
-| **Pipe**        | `cat file \| q "explain"` | Analyze piped content                  |
+| **Pipe**        | `cat file \| q "convert"` | Transform piped content, raw output    |
 | **Interactive** | `q -i`                    | TUI chat with full context             |
 | **Agent**       | `q -x "task"`             | Execute with tools (read, write, bash) |
 
@@ -58,18 +58,25 @@ q "explain this error" < error.log
 
 ### 🔀 Pipe Mode
 
-Pipe anything to q for analysis.
+A true Unix pipeline citizen. Pipe content in, get raw output back.
 
 ```bash
-# Explain code
-cat src/lib/storage.ts | q "explain this"
+# Transform data formats
+cat config.yaml | q "convert to json" > config.json
 
-# Debug errors
-./build.sh 2>&1 | q "why did this fail"
+# Extract information
+cat server.log | q "extract all IP addresses" | sort -u
 
-# Review diffs
-git diff | q "summarize these changes"
+# Analyze and chain
+git diff | q "summarize" | q "translate to spanish"
 ```
+
+Pipe mode features:
+
+- **Raw output** — no markdown, no code blocks, just content
+- **Exit codes** — 0 on success, 1 on failure
+- **Read-only tools** — can read local files for context
+- **Silent** — errors go to stderr, content to stdout
 
 ### 🖥️ Interactive Mode
 

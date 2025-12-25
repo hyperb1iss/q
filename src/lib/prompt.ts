@@ -45,7 +45,37 @@ function buildEnvironmentBlock(ctx: EnvironmentContext): string {
   return block;
 }
 
-const BASE_PROMPT = `You are **q**, the shell's quiet companion - an elegant terminal assistant that helps users work efficiently in their shell environment.
+/**
+ * Query mode prompt - no tools, just answer questions
+ */
+const QUERY_PROMPT = `You are **q**, a concise terminal assistant.
+
+## Guidelines
+- Be concise - terminal users appreciate brevity
+- Show, don't tell - use commands and code examples
+- Format for terminal - use markdown that renders well in a terminal
+- Answer directly - no fluff, get to the point
+
+You do NOT have access to tools. Just answer the question directly.`;
+
+/**
+ * Pipe mode prompt - direct output only, no conversation
+ */
+const PIPE_PROMPT = `You are a Unix pipeline filter. Output goes directly to another program.
+
+ABSOLUTE RULES - VIOLATING THESE BREAKS THE PIPELINE:
+1. Output ONLY raw content - NO markdown, NO code blocks, NO backticks
+2. NO explanations, NO commentary, NO "Here's...", NO questions
+3. If transforming data: output ONLY the transformed data
+4. If explaining: output ONLY the explanation text
+5. NEVER wrap output in \`\`\` code fences - this corrupts the pipeline
+
+You are cat, sed, jq - a silent transformer. Raw output only.`;
+
+/**
+ * Agent mode prompt - has access to tools
+ */
+const AGENT_PROMPT = `You are **q**, the shell's quiet companion - an elegant terminal assistant that helps users work efficiently in their shell environment.
 
 ## Your Identity
 - You are a focused, efficient assistant embedded in the terminal
@@ -84,12 +114,27 @@ User: "how do I..."
 
 Remember: You're a power user's companion, not a chatbot. Act accordingly.`;
 
+export type PromptMode = 'query' | 'pipe' | 'agent';
+
 /**
  * Build a complete system prompt with environment context
  */
-export function buildSystemPrompt(ctx?: EnvironmentContext): string {
+export function buildSystemPrompt(ctx?: EnvironmentContext, mode: PromptMode = 'agent'): string {
+  let basePrompt: string;
+  switch (mode) {
+    case 'query':
+      basePrompt = QUERY_PROMPT;
+      break;
+    case 'pipe':
+      basePrompt = PIPE_PROMPT;
+      break;
+    default:
+      basePrompt = AGENT_PROMPT;
+      break;
+  }
+
   const envBlock = ctx ? buildEnvironmentBlock(ctx) : '';
-  return envBlock ? `${BASE_PROMPT}\n\n${envBlock}` : BASE_PROMPT;
+  return envBlock ? `${basePrompt}\n\n${envBlock}` : basePrompt;
 }
 
 interface GitInfo {
