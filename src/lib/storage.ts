@@ -7,7 +7,7 @@
 
 import { Database } from 'bun:sqlite';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Message, Session } from '../types.js';
@@ -43,7 +43,17 @@ function getDb(): Database {
   }
 
   const dbPath = join(dataDir, 'sessions.db');
+  const isNew = !existsSync(dbPath);
   db = new Database(dbPath);
+
+  // Set restrictive permissions on new database (owner read/write only)
+  if (isNew) {
+    try {
+      chmodSync(dbPath, 0o600);
+    } catch {
+      // Ignore permission errors on systems that don't support chmod
+    }
+  }
 
   // Enable WAL mode for better concurrent access
   db.run('PRAGMA journal_mode = WAL');

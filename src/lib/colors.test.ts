@@ -1,5 +1,14 @@
-import { describe, expect, test } from 'bun:test';
-import { box, color, colors, semantic, status } from './colors.js';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { box, color, colors, semantic, setColorMode, status } from './colors.js';
+
+// Force colors on for tests (no TTY in test environment)
+beforeAll(() => {
+  setColorMode('always');
+});
+
+afterAll(() => {
+  setColorMode('auto');
+});
 
 describe('colors', () => {
   test('exports ANSI true color codes', () => {

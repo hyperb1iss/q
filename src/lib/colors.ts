@@ -3,7 +3,34 @@
  *
  * All colors use ANSI true color (24-bit) for maximum vibrancy.
  * Based on the Neon variant of SilkCircuit.
+ *
+ * Supports NO_COLOR standard (https://no-color.org/) for accessibility.
  */
+
+export type ColorMode = 'auto' | 'always' | 'never';
+
+/** Current color mode - can be set by CLI */
+let colorMode: ColorMode = 'auto';
+
+/**
+ * Set the color mode
+ */
+export function setColorMode(mode: ColorMode): void {
+  colorMode = mode;
+}
+
+/**
+ * Check if colors should be enabled
+ */
+export function colorsEnabled(): boolean {
+  if (colorMode === 'always') return true;
+  if (colorMode === 'never') return false;
+
+  // Auto mode: respect NO_COLOR standard and TTY detection
+  if (process.env.NO_COLOR !== undefined) return false;
+  if (process.env.FORCE_COLOR !== undefined) return true;
+  return process.stdout.isTTY ?? false;
+}
 
 export const colors = {
   // Primary palette
@@ -33,8 +60,10 @@ export type ColorName = keyof typeof colors;
 
 /**
  * Apply a color to text with automatic reset
+ * Returns plain text if colors are disabled
  */
 export function color(text: string, ...styles: ColorName[]): string {
+  if (!colorsEnabled()) return text;
   const prefix = styles.map(s => colors[s]).join('');
   return `${prefix}${text}${colors.reset}`;
 }
@@ -53,17 +82,17 @@ export const semantic = {
 } as const;
 
 /**
- * Status indicators
+ * Status indicators (computed on access to respect color mode)
  */
 export const status = {
-  success: color('✓', 'green'),
-  error: color('✗', 'red'),
-  warning: color('⚠', 'yellow'),
-  info: color('ℹ', 'cyan'),
-  pending: color('○', 'muted'),
-  active: color('●', 'purple'),
-  tool: color('▸', 'coral'),
-  thinking: color('◆', 'purple'),
+  get success() { return color('✓', 'green'); },
+  get error() { return color('✗', 'red'); },
+  get warning() { return color('⚠', 'yellow'); },
+  get info() { return color('ℹ', 'cyan'); },
+  get pending() { return color('○', 'muted'); },
+  get active() { return color('●', 'purple'); },
+  get tool() { return color('▸', 'coral'); },
+  get thinking() { return color('◆', 'purple'); },
 } as const;
 
 /**

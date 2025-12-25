@@ -46,6 +46,7 @@ export default defineConfig({
     confirmDestructive: true, // Confirm before destructive ops
     maxCostPerQuery: 0.5, // Max cost in USD per query
     blockedCommands: ['rm -rf /', 'dd if='], // Blocked shell commands
+    maxInputSize: 100000, // Max input size in characters (~100KB)
   },
 
   // Optional: Custom system prompt addition

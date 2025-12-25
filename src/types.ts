@@ -60,6 +60,9 @@ export interface CliArgs {
   /** Output shell integration script */
   shellInit?: 'bash' | 'zsh' | 'fish';
 
+  /** Color mode: auto, always, never */
+  color?: 'auto' | 'always' | 'never';
+
   /** Show version */
   version?: boolean;
 
@@ -98,6 +101,8 @@ export interface Config {
     confirmDestructive: boolean;
     maxCostPerQuery: number;
     blockedCommands: string[];
+    /** Max input size in characters (default: 100000) */
+    maxInputSize: number;
   };
 }
 
@@ -118,6 +123,7 @@ export const defaultConfig: Config = {
     confirmDestructive: true,
     maxCostPerQuery: 0.5,
     blockedCommands: [],
+    maxInputSize: 100000, // ~100KB, about 25k tokens
   },
 };
 
