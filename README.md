@@ -1,5 +1,9 @@
 # q
 
+[![CI](https://github.com/hyperb1iss/q/actions/workflows/ci.yml/badge.svg)](https://github.com/hyperb1iss/q/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@hyperb1iss/q.svg)](https://www.npmjs.com/package/@hyperb1iss/q)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 > The Shell's Quiet Companion
 
 **q** is an elegant CLI tool that brings Claude's agent capabilities directly into your terminal

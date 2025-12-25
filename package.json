@@ -20,6 +20,7 @@
     "lint:all": "biome check .",
     "lint:all:fix": "biome check --write --unsafe .",
     "format": "biome format --write . && prettier --write \"**/*.{yaml,yml,md}\"",
+    "format:check": "biome format . && prettier --check \"**/*.{yaml,yml,md}\"",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "tsc --noEmit",

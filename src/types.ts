@@ -57,6 +57,9 @@ export interface CliArgs {
   /** Raw output without markdown formatting */
   raw?: boolean;
 
+  /** Output shell integration script */
+  shellInit?: 'bash' | 'zsh' | 'fish';
+
   /** Show version */
   version?: boolean;
 

@@ -14,7 +14,12 @@ import { query, streamQuery } from './lib/agent.js';
 import { color, semantic, status } from './lib/colors.js';
 import { loadQConfig } from './lib/config.js';
 import { render as renderMarkdown } from './lib/markdown.js';
-import { AUTO_APPROVED_TOOLS, INTERACTIVE_TOOLS, SYSTEM_PROMPT } from './lib/prompt.js';
+import {
+  AUTO_APPROVED_TOOLS,
+  buildSystemPrompt,
+  getEnvironmentContext,
+  INTERACTIVE_TOOLS,
+} from './lib/prompt.js';
 import {
   addMessage,
   createSession,
@@ -25,6 +30,11 @@ import {
   updateSessionStats,
 } from './lib/storage.js';
 import type { CliArgs, Config, Mode } from './types.js';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Tools that require explicit user approval */
 const APPROVAL_REQUIRED_TOOLS = ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
@@ -89,6 +99,11 @@ function parseArgs(): CliArgs {
     .option('raw', {
       type: 'boolean',
       describe: 'Raw output without markdown formatting',
+    })
+    .option('shell-init', {
+      type: 'string',
+      choices: ['bash', 'zsh', 'fish'] as const,
+      describe: 'Output shell integration script for sourcing',
     })
     .example('$0 "what does this error mean"', 'Quick query')
     .example('cat error.log | $0 "explain this"', 'Pipe mode')
@@ -178,6 +193,31 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 /**
+ * Output shell integration script for the specified shell
+ */
+function outputShellInit(shell: 'bash' | 'zsh' | 'fish'): void {
+  const shellDir = join(__dirname, '..', 'shell');
+  const scriptPath = join(shellDir, `q.${shell}`);
+
+  try {
+    const script = readFileSync(scriptPath, 'utf-8');
+    console.log(script);
+  } catch {
+    // Fallback: try relative to dist directory
+    const distShellDir = join(__dirname, '..', '..', 'shell');
+    const distScriptPath = join(distShellDir, `q.${shell}`);
+    try {
+      const script = readFileSync(distScriptPath, 'utf-8');
+      console.log(script);
+    } catch {
+      console.error(semantic.error(`Shell integration script not found for ${shell}`));
+      console.error(semantic.muted(`Looked in: ${scriptPath} and ${distScriptPath}`));
+      process.exit(1);
+    }
+  }
+}
+
+/**
  * Show recent sessions
  */
 function showSessions(): void {
@@ -224,6 +264,12 @@ async function main(): Promise<void> {
   if (process.env.DEBUG) {
     console.error(semantic.muted(`[debug] mode=${mode} args=${JSON.stringify(args)}`));
     console.error(semantic.muted(`[debug] config=${JSON.stringify(config)}`));
+  }
+
+  // Handle --shell-init flag (early exit)
+  if (args.shellInit) {
+    outputShellInit(args.shellInit as 'bash' | 'zsh' | 'fish');
+    return;
   }
 
   // Handle --sessions flag
@@ -379,8 +425,9 @@ async function runQuery(prompt: string, args: CliArgs, _config: Config): Promise
     if (args.stream) {
       // Streaming mode - show output as it arrives
       let lastText = '';
+      const systemPrompt = buildSystemPrompt(getEnvironmentContext());
       const opts = buildQueryOptions(args, {
-        systemPrompt: SYSTEM_PROMPT,
+        systemPrompt,
         tools: [],
         includePartialMessages: true,
       });
@@ -425,7 +472,8 @@ async function runQuery(prompt: string, args: CliArgs, _config: Config): Promise
       }
     } else {
       // Non-streaming mode - wait for complete response
-      const opts = buildQueryOptions(args, { systemPrompt: SYSTEM_PROMPT, tools: [] });
+      const systemPrompt = buildSystemPrompt(getEnvironmentContext());
+      const opts = buildQueryOptions(args, { systemPrompt, tools: [] });
       const result = await query(prompt, opts);
 
       // Clear thinking indicator
@@ -656,8 +704,9 @@ async function runAgent(
 
   try {
     // Agent mode - enable common tools with custom permission handler
+    const systemPrompt = buildSystemPrompt(getEnvironmentContext());
     const queryExtras: Parameters<typeof buildQueryOptions>[1] = {
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt,
       tools: [...INTERACTIVE_TOOLS, 'Write', 'Edit'],
       includePartialMessages: true,
       canUseTool,

@@ -8,7 +8,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SDKAssistantMessage, SDKResultMessage } from '../lib/agent.js';
 import { streamQuery } from '../lib/agent.js';
 import { renderSync } from '../lib/markdown.js';
-import { AUTO_APPROVED_TOOLS, INTERACTIVE_TOOLS, SYSTEM_PROMPT } from '../lib/prompt.js';
+import {
+  AUTO_APPROVED_TOOLS,
+  buildSystemPrompt,
+  getEnvironmentContext,
+  INTERACTIVE_TOOLS,
+} from '../lib/prompt.js';
+import { HelpOverlay } from './HelpOverlay.js';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -53,6 +59,9 @@ export function App({ initialPrompt, model }: AppProps) {
 
   const terminalHeight = stdout?.rows ?? 24;
   const terminalWidth = stdout?.columns ?? 80;
+  const [showHelp, setShowHelp] = useState(false);
+  const [inputHistory, setInputHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   // Calculate available height for messages (minus header, input, status)
   const messageAreaHeight = terminalHeight - 6;
@@ -70,6 +79,8 @@ export function App({ initialPrompt, model }: AppProps) {
       if (!prompt.trim() || isLoading) return;
 
       setMessages(prev => [...prev, { role: 'user', content: prompt }]);
+      setInputHistory(prev => [...prev, prompt]);
+      setHistoryIndex(-1);
       setInput('');
       setIsLoading(true);
       setStreamingText('');
@@ -78,8 +89,9 @@ export function App({ initialPrompt, model }: AppProps) {
 
       try {
         let fullText = '';
+        const systemPrompt = buildSystemPrompt(getEnvironmentContext());
         const opts: Parameters<typeof streamQuery>[1] = {
-          systemPrompt: SYSTEM_PROMPT,
+          systemPrompt,
           tools: INTERACTIVE_TOOLS,
           allowedTools: AUTO_APPROVED_TOOLS,
           permissionMode: 'default',
@@ -162,11 +174,63 @@ export function App({ initialPrompt, model }: AppProps) {
   }, [initialPrompt, submitQuery]);
 
   useInput((ch, key) => {
+    // Toggle help overlay
+    if (ch === '?' && !isLoading) {
+      setShowHelp(prev => !prev);
+      return;
+    }
+
+    // Close help with escape
+    if (showHelp) {
+      if (key.escape || ch === '?') {
+        setShowHelp(false);
+      }
+      return;
+    }
+
+    // Exit
     if (key.escape || (key.ctrl && ch === 'c')) {
       exit();
       return;
     }
+
     if (isLoading) return;
+
+    // Clear conversation (Ctrl+L)
+    if (key.ctrl && ch === 'l') {
+      setMessages([]);
+      setStats(null);
+      return;
+    }
+
+    // Clear input (Ctrl+U)
+    if (key.ctrl && ch === 'u') {
+      setInput('');
+      setHistoryIndex(-1);
+      return;
+    }
+
+    // Input history navigation
+    if (key.upArrow && inputHistory.length > 0) {
+      const newIndex = historyIndex < inputHistory.length - 1 ? historyIndex + 1 : historyIndex;
+      setHistoryIndex(newIndex);
+      setInput(inputHistory[inputHistory.length - 1 - newIndex] ?? '');
+      return;
+    }
+
+    if (key.downArrow) {
+      if (historyIndex > 0) {
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setInput(inputHistory[inputHistory.length - 1 - newIndex] ?? '');
+      } else if (historyIndex === 0) {
+        setHistoryIndex(-1);
+        setInput('');
+      }
+      return;
+    }
+
+    // Submit
     if (key.return) {
       void submitQuery(input);
     } else if (key.backspace || key.delete) {
@@ -175,6 +239,11 @@ export function App({ initialPrompt, model }: AppProps) {
       setInput(prev => prev + ch);
     }
   });
+
+  // Render help overlay if active
+  if (showHelp) {
+    return <HelpOverlay width={terminalWidth} height={terminalHeight} />;
+  }
 
   return (
     <Box flexDirection="column" height={terminalHeight}>
@@ -257,7 +326,7 @@ export function App({ initialPrompt, model }: AppProps) {
       {/* Status bar */}
       <Box paddingX={1}>
         <Text color="gray" dimColor>
-          esc quit · enter send
+          ? help · esc quit · ↑↓ history
         </Text>
         {messages.length > visibleMessages.length && (
           <Text color="gray" dimColor>
