@@ -26,7 +26,7 @@ const DEFAULT_MAX_INPUT_SIZE = 100000;
 /**
  * Validate input size against configured limits
  */
-function validateInputSize(input: string, maxSize: number): { valid: boolean; message?: string } {
+function validateInputSize(input: string, maxSize: number): { valid: true } | { valid: false; message: string } {
   if (input.length > maxSize) {
     const sizeKB = Math.round(input.length / 1024);
     const maxKB = Math.round(maxSize / 1024);
@@ -277,7 +277,7 @@ async function main(): Promise<void> {
       }
       const validation = validateInputSize(args.query, maxInputSize);
       if (!validation.valid) {
-        console.error(semantic.error(validation.message!));
+        console.error(semantic.error(validation.message));
         process.exit(1);
       }
       await runQuery(args.query, args, config);
@@ -290,7 +290,7 @@ async function main(): Promise<void> {
       const fullPrompt = `<context>\n${stdin.trim()}\n</context>\n\n${prompt}`;
       const validation = validateInputSize(fullPrompt, maxInputSize);
       if (!validation.valid) {
-        console.error(semantic.error(validation.message!));
+        console.error(semantic.error(validation.message));
         console.log(semantic.muted('Tip: Reduce input size or increase safety.maxInputSize in config'));
         process.exit(1);
       }
@@ -310,7 +310,7 @@ async function main(): Promise<void> {
       }
       const validation = validateInputSize(args.query, maxInputSize);
       if (!validation.valid) {
-        console.error(semantic.error(validation.message!));
+        console.error(semantic.error(validation.message));
         process.exit(1);
       }
       await runAgent(args.query, args, config);

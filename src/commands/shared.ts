@@ -3,7 +3,7 @@
  */
 
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
-import { query } from '../lib/agent.js';
+import type { query } from '../lib/agent.js';
 import type { CliArgs } from '../types.js';
 
 /** Model aliases */
