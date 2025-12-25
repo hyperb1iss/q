@@ -26,7 +26,7 @@
 
 ```bash
 # Install
-bun add -g @hyperb1iss/q
+npm i -g @hyperb1iss/q
 
 # Set your API key
 export ANTHROPIC_API_KEY="sk-ant-..."

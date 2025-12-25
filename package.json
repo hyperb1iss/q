@@ -1,7 +1,7 @@
 {
   "name": "@hyperb1iss/q",
   "version": "0.1.0",
-  "description": "The shell's quiet companion - elegant CLI agent for quick queries",
+  "description": "The tiniest Claude Code CLI — ask, pipe, chat",
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
