@@ -46,7 +46,7 @@ describe('storage', () => {
       trackSession(session.id);
 
       expect(session.id).toBeDefined();
-      expect(session.id.length).toBe(8); // Short random ID
+      expect(session.id.length).toBe(16); // Crypto-secure hex ID
       expect(session.model).toBe('claude-sonnet-4');
       expect(session.messages).toEqual([]);
       expect(session.totalTokens).toBe(0);

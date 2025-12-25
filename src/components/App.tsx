@@ -89,7 +89,7 @@ export function App({ initialPrompt, model }: AppProps) {
 
       try {
         let fullText = '';
-        const systemPrompt = buildSystemPrompt(getEnvironmentContext());
+        const systemPrompt = buildSystemPrompt(await getEnvironmentContext());
         const opts: Parameters<typeof streamQuery>[1] = {
           systemPrompt,
           tools: INTERACTIVE_TOOLS,

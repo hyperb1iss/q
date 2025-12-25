@@ -278,6 +278,18 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Validate API key before any queries
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error(semantic.error('Missing ANTHROPIC_API_KEY environment variable'));
+    console.log();
+    console.log('Set your Anthropic API key:');
+    console.log(color('  export ANTHROPIC_API_KEY="sk-ant-..."', 'cyan'));
+    console.log();
+    console.log(semantic.muted('Get your API key at: https://console.anthropic.com/settings/keys'));
+    console.log(semantic.muted('Add to ~/.zshrc or ~/.bashrc to persist across sessions.'));
+    process.exit(1);
+  }
+
   // Handle --resume flag
   if (args.resume) {
     const session = args.resume === 'last' ? getLastSession() : getSession(String(args.resume));
@@ -425,7 +437,7 @@ async function runQuery(prompt: string, args: CliArgs, _config: Config): Promise
     if (args.stream) {
       // Streaming mode - show output as it arrives
       let lastText = '';
-      const systemPrompt = buildSystemPrompt(getEnvironmentContext());
+      const systemPrompt = buildSystemPrompt(await getEnvironmentContext());
       const opts = buildQueryOptions(args, {
         systemPrompt,
         tools: [],
@@ -472,7 +484,7 @@ async function runQuery(prompt: string, args: CliArgs, _config: Config): Promise
       }
     } else {
       // Non-streaming mode - wait for complete response
-      const systemPrompt = buildSystemPrompt(getEnvironmentContext());
+      const systemPrompt = buildSystemPrompt(await getEnvironmentContext());
       const opts = buildQueryOptions(args, { systemPrompt, tools: [] });
       const result = await query(prompt, opts);
 
@@ -704,7 +716,7 @@ async function runAgent(
 
   try {
     // Agent mode - enable common tools with custom permission handler
-    const systemPrompt = buildSystemPrompt(getEnvironmentContext());
+    const systemPrompt = buildSystemPrompt(await getEnvironmentContext());
     const queryExtras: Parameters<typeof buildQueryOptions>[1] = {
       systemPrompt,
       tools: [...INTERACTIVE_TOOLS, 'Write', 'Edit'],

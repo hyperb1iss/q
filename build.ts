@@ -11,6 +11,7 @@ const EXTERNALS = [
   '@anthropic-ai/claude-agent-sdk', // Spawns Claude Code subprocess
   'react-devtools-core', // Ink optional devtools
   'node-fetch-native', // ESM/CJS interop bug: github.com/unjs/node-fetch-native/issues/114
+  'shiki', // Lazy-loaded syntax highlighter - too large to bundle (9MB+)
 ];
 
 const isCompile = process.argv.includes('--compile');

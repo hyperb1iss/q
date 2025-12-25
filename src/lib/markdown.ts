@@ -2,73 +2,98 @@
  * Terminal Markdown Renderer
  *
  * Renders markdown with syntax highlighting using shiki and SilkCircuit colors.
+ * Shiki is lazy-loaded only when code blocks require highlighting.
  */
 
 import { Marked, type Token, type Tokens } from 'marked';
-import { createHighlighter, type Highlighter } from 'shiki';
 import { colors } from './colors.js';
 
+/** Dynamically imported shiki types */
+type Highlighter = Awaited<ReturnType<typeof import('shiki')['createHighlighter']>>;
+
 let highlighter: Highlighter | null = null;
+let shikiLoading: Promise<Highlighter> | null = null;
+
+/** Languages we support - loaded on demand */
+const SUPPORTED_LANGS = [
+  'javascript',
+  'typescript',
+  'python',
+  'rust',
+  'go',
+  'bash',
+  'shell',
+  'json',
+  'yaml',
+  'toml',
+  'markdown',
+  'html',
+  'css',
+  'sql',
+  'diff',
+] as const;
+
+type SupportedLang = (typeof SUPPORTED_LANGS)[number];
 
 /**
- * Initialize the syntax highlighter (lazy loaded)
+ * Initialize the syntax highlighter (lazy loaded via dynamic import)
  */
 async function getHighlighter(): Promise<Highlighter> {
-  if (!highlighter) {
+  if (highlighter) return highlighter;
+
+  // Avoid multiple simultaneous loads
+  if (shikiLoading) return shikiLoading;
+
+  shikiLoading = (async () => {
+    const { createHighlighter } = await import('shiki');
     highlighter = await createHighlighter({
       themes: ['github-dark'],
-      langs: [
-        'javascript',
-        'typescript',
-        'python',
-        'rust',
-        'go',
-        'bash',
-        'shell',
-        'json',
-        'yaml',
-        'toml',
-        'markdown',
-        'html',
-        'css',
-        'sql',
-        'diff',
-      ],
+      langs: [...SUPPORTED_LANGS],
     });
-  }
-  return highlighter;
+    return highlighter;
+  })();
+
+  return shikiLoading;
+}
+
+/**
+ * Check if a language needs syntax highlighting
+ */
+function needsHighlighting(lang: string): lang is SupportedLang {
+  return SUPPORTED_LANGS.includes(lang as SupportedLang);
+}
+
+/**
+ * Render a code block without syntax highlighting (fast path)
+ */
+function renderCodeBlockSimple(code: string, lang: string): string {
+  const lines = code.split('\n');
+  const langLabel = lang ? ` ${colors.cyan}${lang}${colors.reset}` : '';
+  const header = `${colors.muted}┌${langLabel}${'─'.repeat(Math.max(0, 77 - lang.length))}┐${colors.reset}`;
+  const boxBottom = `${colors.muted}└${'─'.repeat(78)}┘${colors.reset}`;
+  const content = lines.map(line => `${colors.muted}│${colors.reset} ${line}`).join('\n');
+  return `${header}\n${content}\n${boxBottom}`;
 }
 
 /**
  * Render a code block with syntax highlighting
  */
 async function renderCodeBlock(code: string, lang: string): Promise<string> {
-  const hl = await getHighlighter();
-
-  // Check if language is supported
-  const loadedLangs = hl.getLoadedLanguages();
-  const actualLang = loadedLangs.includes(lang) ? lang : 'text';
-
-  if (actualLang === 'text') {
-    // No highlighting, just dim the code
-    const lines = code.split('\n');
-    const boxTop = `${colors.muted}┌${'─'.repeat(78)}┐${colors.reset}`;
-    const boxBottom = `${colors.muted}└${'─'.repeat(78)}┘${colors.reset}`;
-    const content = lines
-      .map(
-        line => `${colors.muted}│${colors.reset} ${line.padEnd(76)} ${colors.muted}│${colors.reset}`
-      )
-      .join('\n');
-    return `${boxTop}\n${content}\n${boxBottom}`;
+  // Skip shiki for unsupported languages - use fast path
+  if (!needsHighlighting(lang)) {
+    return renderCodeBlockSimple(code, lang);
   }
 
-  // Get highlighted code as ANSI
+  // Load shiki on demand
+  const hl = await getHighlighter();
+
+  // Get highlighted code as HTML
   const highlighted = hl.codeToHtml(code, {
-    lang: actualLang,
+    lang,
     theme: 'github-dark',
   });
 
-  // Convert HTML to ANSI (simplified conversion)
+  // Convert HTML to ANSI
   const ansi = htmlToAnsi(highlighted);
 
   // Add box around code

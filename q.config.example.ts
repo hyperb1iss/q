@@ -3,9 +3,18 @@
  *
  * Copy this to q.config.ts in your project root or ~/.config/q/
  * Supports: .ts, .js, .mjs, .cjs, .json, .yaml, .toml
+ *
+ * Import path depends on your setup:
+ * - Development (in q repo):     import { defineConfig } from './src/lib/config.js';
+ * - Installed globally:          import { defineConfig } from '@anthropic-ai/q/config';
+ * - Or just use plain object:    export default { model: 'sonnet', ... };
  */
 
+// For development in this repo:
 import { defineConfig } from './src/lib/config.js';
+
+// For installed package, use:
+// import { defineConfig } from '@anthropic-ai/q/config';
 
 export default defineConfig({
   // Default model: 'sonnet' | 'opus' | 'haiku'

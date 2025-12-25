@@ -6,6 +6,7 @@
  */
 
 import { Database } from 'bun:sqlite';
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -89,10 +90,17 @@ function getDb(): Database {
 }
 
 /**
- * Generate a short session ID
+ * Generate a cryptographically secure session ID
  */
 function generateId(): string {
-  return Math.random().toString(36).slice(2, 10);
+  return randomBytes(8).toString('hex');
+}
+
+/**
+ * Validate session ID format (16 hex characters)
+ */
+function isValidSessionId(id: string): boolean {
+  return /^[a-f0-9]{16}$/.test(id);
 }
 
 /**
@@ -189,6 +197,12 @@ export function updateSdkSessionId(sessionId: string, sdkSessionId: string): voi
  * Get a session by ID
  */
 export function getSession(id: string): Session | null {
+  // Validate session ID format to prevent injection
+  // Allow both old format (8 chars alphanumeric) and new format (16 hex chars)
+  if (!/^[a-z0-9]{8}$/.test(id) && !isValidSessionId(id)) {
+    return null;
+  }
+
   const database = getDb();
 
   const row = database

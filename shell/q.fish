@@ -216,9 +216,11 @@ function q!
     echo ""
     q -i
   else
+    # Safely join arguments
+    set -l prompt (string join " " $argv)
     q "$context
 
-$argv"
+$prompt"
   end
 end
 
@@ -230,9 +232,9 @@ function q\?
   end
 
   set -l context (_q_build_context 0 1)
-  set -l prompt $argv
-  if test -z "$prompt"
-    set prompt "Explain this error and suggest how to fix it"
+  set -l prompt "Explain this error and suggest how to fix it"
+  if test (count $argv) -gt 0
+    set prompt (string join " " $argv)
   end
 
   q "$context

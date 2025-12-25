@@ -2,7 +2,6 @@
  * System prompt for q - The Shell's Quiet Companion
  */
 
-import { execSync } from 'node:child_process';
 import { homedir, hostname, platform, release, userInfo } from 'node:os';
 
 export interface EnvironmentContext {
@@ -99,48 +98,48 @@ interface GitInfo {
 }
 
 /**
- * Get git info for the current directory
+ * Run a git command asynchronously
  */
-function getGitContext(): GitInfo | null {
+async function runGit(args: string[]): Promise<{ ok: boolean; output: string }> {
+  const proc = Bun.spawn(['git', ...args], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const exitCode = await proc.exited;
+  const output = await new Response(proc.stdout).text();
+  return { ok: exitCode === 0, output: output.trim() };
+}
+
+/**
+ * Get git info for the current directory (async)
+ */
+async function getGitContextAsync(): Promise<GitInfo | null> {
   try {
     // Check if we're in a git repo
-    execSync('git rev-parse --is-inside-work-tree', {
-      stdio: 'pipe',
-      encoding: 'utf-8',
-    });
+    const { ok: isRepo } = await runGit(['rev-parse', '--is-inside-work-tree']);
+    if (!isRepo) return null;
 
     // Get branch name
-    const branch = execSync('git branch --show-current', {
-      stdio: 'pipe',
-      encoding: 'utf-8',
-    }).trim();
+    const { ok: hasBranch, output: branch } = await runGit(['branch', '--show-current']);
+    if (!hasBranch || !branch) return null;
 
-    if (!branch) {
-      return null;
-    }
+    // Check if dirty (git diff returns non-zero if dirty)
+    const { ok: isClean } = await runGit(['diff', '--quiet']);
+    const { ok: isCacheClean } = await runGit(['diff', '--cached', '--quiet']);
 
-    // Check if dirty
-    let status: 'clean' | 'dirty' = 'clean';
-    try {
-      execSync('git diff --quiet && git diff --cached --quiet', {
-        stdio: 'pipe',
-      });
-    } catch {
-      status = 'dirty';
-    }
-
-    return { branch, status };
+    return {
+      branch,
+      status: isClean && isCacheClean ? 'clean' : 'dirty',
+    };
   } catch {
     return null;
   }
 }
 
 /**
- * Get current environment context
+ * Get current environment context (async for non-blocking git)
  */
-export function getEnvironmentContext(): EnvironmentContext {
-  const git = getGitContext();
-
+export async function getEnvironmentContext(): Promise<EnvironmentContext> {
   const ctx: EnvironmentContext = {
     cwd: process.cwd(),
   };
@@ -155,6 +154,8 @@ export function getEnvironmentContext(): EnvironmentContext {
   const termProgram = process.env.TERM_PROGRAM;
   if (termProgram) ctx.termProgram = termProgram;
 
+  // Fetch git context asynchronously (non-blocking)
+  const git = await getGitContextAsync();
   if (git) {
     ctx.gitBranch = git.branch;
     ctx.gitStatus = git.status;
@@ -162,11 +163,6 @@ export function getEnvironmentContext(): EnvironmentContext {
 
   return ctx;
 }
-
-/**
- * Static system prompt (legacy - use buildSystemPrompt for dynamic context)
- */
-export const SYSTEM_PROMPT = buildSystemPrompt(getEnvironmentContext());
 
 /**
  * Default tools for interactive mode

@@ -207,9 +207,11 @@ q!() {
     echo ""
     q -i
   else
-    q "$context
+    # Use local variable to safely handle arguments
+    local prompt="${*}"
+    q "${context}
 
-$*"
+${prompt}"
   fi
 }
 
@@ -224,9 +226,9 @@ q?() {
   context=$(_q_build_context 0 1)
   local prompt="${*:-Explain this error and suggest how to fix it}"
 
-  q "$context
+  q "${context}
 
-$prompt"
+${prompt}"
 }
 
 # qx - Execute mode with context
