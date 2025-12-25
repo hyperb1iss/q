@@ -114,19 +114,21 @@ eval "$(q --shell-init zsh)"   # or bash, fish
 
 This gives you:
 
-| Function  | What It Does                                              |
-| --------- | --------------------------------------------------------- |
-| `q!`      | Ask with automatic context (pwd, recent commands, errors) |
-| `q!!`     | Ask about the last command that failed                    |
-| `explain` | Explain the last command                                  |
-| `qcd`     | AI-powered directory navigation                           |
+| Command | What It Does                            |
+| ------- | --------------------------------------- |
+| `qq`    | Quick query (or interactive if no args) |
+| `qctx`  | Query with last command context         |
+| `qerr`  | Explain last error                      |
+| `qx`    | Execute mode with tools                 |
+| `qr`    | Resume last session                     |
+| Ctrl+Q  | Quick query widget                      |
 
 ```bash
 # With shell integration
 $ make build
 error: missing dependency...
 
-$ q!!
+$ qerr
 # Automatically includes the failed command and error output
 ```
 
