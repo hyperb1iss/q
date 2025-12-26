@@ -4,13 +4,31 @@
 
 import { color, semantic } from './colors.js';
 
+/** Time constants in milliseconds */
+const MS_PER_MINUTE = 60_000;
+const MS_PER_HOUR = 3_600_000;
+const MS_PER_DAY = 86_400_000;
+
+/** Time unit boundaries */
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+const DAYS_PER_WEEK = 7;
+
+/** Token formatting thresholds */
+const TOKENS_USE_RAW = 1_000;
+const TOKENS_USE_DECIMAL = 10_000;
+
+/** Display width for separators and truncation */
+export const SEPARATOR_WIDTH = 60;
+const TRUNCATE_LENGTH = 60;
+
 /**
  * Format token count nicely
  */
 export function formatTokens(input: number, output: number): string {
   const total = input + output;
-  if (total < 1000) return `${total}`;
-  if (total < 10000) return `${(total / 1000).toFixed(1)}k`;
+  if (total < TOKENS_USE_RAW) return `${total}`;
+  if (total < TOKENS_USE_DECIMAL) return `${(total / 1000).toFixed(1)}k`;
   return `${Math.round(total / 1000)}k`;
 }
 
@@ -35,14 +53,14 @@ export function formatError(error: unknown): string {
  */
 export function formatRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
+  const mins = Math.floor(diff / MS_PER_MINUTE);
+  const hours = Math.floor(diff / MS_PER_HOUR);
+  const days = Math.floor(diff / MS_PER_DAY);
 
   if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
+  if (mins < MINUTES_PER_HOUR) return `${mins}m ago`;
+  if (hours < HOURS_PER_DAY) return `${hours}h ago`;
+  if (days < DAYS_PER_WEEK) return `${days}d ago`;
   return new Date(timestamp).toLocaleDateString();
 }
 
@@ -80,8 +98,8 @@ export function formatToolCall(toolName: string, input: Record<string, unknown>)
       break;
     case 'Bash':
       inputSummary = color(
-        (input.command as string).slice(0, 60) +
-          ((input.command as string).length > 60 ? '...' : ''),
+        (input.command as string).slice(0, TRUNCATE_LENGTH) +
+          ((input.command as string).length > TRUNCATE_LENGTH ? '...' : ''),
         'cyan'
       );
       break;
@@ -91,11 +109,54 @@ export function formatToolCall(toolName: string, input: Record<string, unknown>)
       inputSummary = color(input.file_path as string, 'cyan');
       break;
     case 'Task':
-      inputSummary = color(String(input.description ?? input.prompt ?? '').slice(0, 50), 'purple');
+      inputSummary = color(
+        String(input.description ?? input.prompt ?? '').slice(0, TRUNCATE_LENGTH),
+        'purple'
+      );
       break;
     default:
-      inputSummary = semantic.muted(JSON.stringify(input).slice(0, 60));
+      inputSummary = semantic.muted(JSON.stringify(input).slice(0, TRUNCATE_LENGTH));
   }
 
   return `  ${icon} ${toolColor} ${inputSummary}`;
+}
+
+/**
+ * Format elapsed time in seconds
+ */
+export function formatElapsed(startTime: number): string {
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  return `${elapsed}s`;
+}
+
+/** Thinking indicator state */
+export interface ThinkingIndicator {
+  stop: () => void;
+}
+
+/**
+ * Create a thinking indicator with elapsed time
+ * Updates every second to show elapsed time
+ */
+export function createThinkingIndicator(
+  label: string,
+  formatter: (text: string) => string
+): ThinkingIndicator {
+  const startTime = Date.now();
+
+  // Write initial indicator
+  process.stdout.write(formatter(`${label}...`));
+
+  // Update every second with elapsed time
+  const interval = setInterval(() => {
+    const elapsed = formatElapsed(startTime);
+    process.stdout.write(`\r\x1b[K${formatter(`${label}... ${elapsed}`)}`);
+  }, 1000);
+
+  return {
+    stop: () => {
+      clearInterval(interval);
+      process.stdout.write('\r\x1b[K');
+    },
+  };
 }

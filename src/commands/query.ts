@@ -5,7 +5,13 @@
 import type { SDKResultMessage } from '../lib/agent.js';
 import { query, streamQuery } from '../lib/agent.js';
 import { semantic, status } from '../lib/colors.js';
-import { formatCost, formatError, formatTokens } from '../lib/format.js';
+import {
+  createThinkingIndicator,
+  formatCost,
+  formatError,
+  formatTokens,
+  type ThinkingIndicator,
+} from '../lib/format.js';
 import { render as renderMarkdown } from '../lib/markdown.js';
 import { buildSystemPrompt, getEnvironmentContext, type PromptMode } from '../lib/prompt.js';
 import type { CliArgs, Config } from '../types.js';
@@ -35,9 +41,10 @@ export async function runQuery(
 ): Promise<void> {
   const quiet = args.quiet ?? false;
 
-  // Show thinking indicator
+  // Show thinking indicator with elapsed time
+  let thinking: ThinkingIndicator | null = null;
   if (!quiet) {
-    process.stdout.write(semantic.muted(`${status.pending} Thinking...`));
+    thinking = createThinkingIndicator(`${status.pending} Thinking`, semantic.muted);
   }
 
   try {
@@ -56,9 +63,7 @@ export async function runQuery(
           const result = message as SDKResultMessage;
 
           // Clear thinking indicator
-          if (!quiet) {
-            process.stdout.write('\r\x1b[K');
-          }
+          thinking?.stop();
 
           // Get response and filter out XML tool blocks
           const rawText =
@@ -120,9 +125,7 @@ export async function runQuery(
       const result = await query(prompt, opts);
 
       // Clear thinking indicator
-      if (!quiet) {
-        process.stdout.write('\r\x1b[K');
-      }
+      thinking?.stop();
 
       if (result.success) {
         // Output based on mode
@@ -176,7 +179,7 @@ export async function runQuery(
     }
   } catch (error) {
     // Clear thinking indicator
-    process.stdout.write('\r\x1b[K');
+    thinking?.stop();
     console.error(semantic.error(`Error: ${formatError(error)}`));
     process.exit(1);
   }

@@ -3,7 +3,7 @@
  */
 
 import { color, semantic } from '../lib/colors.js';
-import { formatCost, formatRelativeTime } from '../lib/format.js';
+import { formatCost, formatRelativeTime, SEPARATOR_WIDTH } from '../lib/format.js';
 import { listSessions } from '../lib/storage.js';
 
 /**
@@ -19,7 +19,7 @@ export function showSessions(): void {
 
   console.log();
   console.log(color('Recent sessions', 'purple', 'bold'));
-  console.log(semantic.muted('─'.repeat(60)));
+  console.log(semantic.muted('─'.repeat(SEPARATOR_WIDTH)));
 
   for (const s of sessions) {
     const title = s.title ?? semantic.muted('(untitled)');

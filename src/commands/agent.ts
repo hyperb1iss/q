@@ -7,7 +7,13 @@ import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKAssistantMessage, SDKResultMessage, SDKSystemMessage } from '../lib/agent.js';
 import { streamQuery } from '../lib/agent.js';
 import { color, semantic, status } from '../lib/colors.js';
-import { formatCost, formatError, formatTokens, formatToolCall } from '../lib/format.js';
+import {
+  formatCost,
+  formatError,
+  formatTokens,
+  formatToolCall,
+  SEPARATOR_WIDTH,
+} from '../lib/format.js';
 import { render as renderMarkdown } from '../lib/markdown.js';
 import {
   AUTO_APPROVED_TOOLS,
@@ -188,7 +194,7 @@ export async function runAgent(
   if (!quiet) {
     console.log();
     console.log(color(`${status.active} Agent mode`, 'purple', 'bold'));
-    console.log(semantic.muted('─'.repeat(60)));
+    console.log(semantic.muted('─'.repeat(SEPARATOR_WIDTH)));
   }
 
   let fullText = '';
@@ -331,7 +337,7 @@ export async function runAgent(
           const cost = formatCost(result.total_cost_usd);
 
           console.log();
-          console.log(semantic.muted('─'.repeat(60)));
+          console.log(semantic.muted('─'.repeat(SEPARATOR_WIDTH)));
           console.log(
             semantic.muted(
               `${status.success} ${tokens} tokens │ ${cost} │ ${args.model ?? 'sonnet'} │ ${result.num_turns} turns │ ${toolCount} tools`

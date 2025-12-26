@@ -3,6 +3,7 @@
  */
 
 import { homedir, hostname, platform, release, userInfo } from 'node:os';
+import { getGitInfo } from './git.js';
 
 export interface EnvironmentContext {
   cwd: string;
@@ -137,50 +138,6 @@ export function buildSystemPrompt(ctx?: EnvironmentContext, mode: PromptMode = '
   return envBlock ? `${basePrompt}\n\n${envBlock}` : basePrompt;
 }
 
-interface GitInfo {
-  branch: string;
-  status: 'clean' | 'dirty';
-}
-
-/**
- * Run a git command asynchronously
- */
-async function runGit(args: string[]): Promise<{ ok: boolean; output: string }> {
-  const proc = Bun.spawn(['git', ...args], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  const exitCode = await proc.exited;
-  const output = await new Response(proc.stdout).text();
-  return { ok: exitCode === 0, output: output.trim() };
-}
-
-/**
- * Get git info for the current directory (async)
- */
-async function getGitContextAsync(): Promise<GitInfo | null> {
-  try {
-    // Check if we're in a git repo
-    const { ok: isRepo } = await runGit(['rev-parse', '--is-inside-work-tree']);
-    if (!isRepo) return null;
-
-    // Get branch name
-    const { ok: hasBranch, output: branch } = await runGit(['branch', '--show-current']);
-    if (!hasBranch || !branch) return null;
-
-    // Check if dirty (git diff returns non-zero if dirty)
-    const { ok: isClean } = await runGit(['diff', '--quiet']);
-    const { ok: isCacheClean } = await runGit(['diff', '--cached', '--quiet']);
-
-    return {
-      branch,
-      status: isClean && isCacheClean ? 'clean' : 'dirty',
-    };
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Get current environment context (async for non-blocking git)
  */
@@ -200,7 +157,7 @@ export async function getEnvironmentContext(): Promise<EnvironmentContext> {
   if (termProgram) ctx.termProgram = termProgram;
 
   // Fetch git context asynchronously (non-blocking)
-  const git = await getGitContextAsync();
+  const git = await getGitInfo();
   if (git) {
     ctx.gitBranch = git.branch;
     ctx.gitStatus = git.status;
