@@ -28,6 +28,30 @@ const VERSION = pkg.version;
 const DEFAULT_MAX_INPUT_SIZE = 100000;
 
 /**
+ * Read files and format as context block
+ */
+function readFileContext(files: string[]): string {
+  const blocks: string[] = [];
+
+  for (const filePath of files) {
+    try {
+      const content = readFileSync(filePath, 'utf-8');
+      const name = filePath.split('/').pop() ?? filePath;
+      blocks.push(`<file name="${name}" path="${filePath}">\n${content}\n</file>`);
+    } catch (error) {
+      console.error(
+        semantic.error(
+          `Cannot read file: ${filePath} - ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
+      );
+      process.exit(1);
+    }
+  }
+
+  return blocks.length > 0 ? `<context>\n${blocks.join('\n\n')}\n</context>\n\n` : '';
+}
+
+/**
  * Validate input size against configured limits
  */
 function validateInputSize(
@@ -43,6 +67,30 @@ function validateInputSize(
     };
   }
   return { valid: true };
+}
+
+/**
+ * Expand prompt aliases in query
+ * Aliases are prefixed with @ (e.g., "@review" -> "Review this code for issues")
+ */
+function expandAliases(query: string, prompts: Record<string, string>): string {
+  // Match @alias at start of query or standalone
+  const aliasMatch = query.match(/^@(\w+)(?:\s+(.*))?$/);
+  if (!aliasMatch) return query;
+
+  const alias = aliasMatch[1];
+  const rest = aliasMatch[2];
+
+  if (!alias) return query;
+
+  const expansion = prompts[alias];
+  if (!expansion) {
+    // Unknown alias - return as-is (user might mean literal @)
+    return query;
+  }
+
+  // If there's additional text after alias, append it
+  return rest ? `${expansion} ${rest}` : expansion;
 }
 
 /**
@@ -102,6 +150,16 @@ function parseArgs(): CliArgs {
       type: 'boolean',
       describe: 'Raw output without markdown formatting',
     })
+    .option('json', {
+      type: 'boolean',
+      describe: 'Output response as JSON',
+    })
+    .option('file', {
+      alias: 'f',
+      type: 'array',
+      string: true,
+      describe: 'Include file(s) as context',
+    })
     .option('shell-init', {
       type: 'string',
       choices: ['bash', 'zsh', 'fish'] as const,
@@ -115,6 +173,8 @@ function parseArgs(): CliArgs {
     })
     .example('$0 "what does this error mean"', 'Quick query')
     .example('cat error.log | $0 "explain this"', 'Pipe mode')
+    .example('$0 -f src/index.ts "explain this"', 'Include file as context')
+    .example('$0 "@review src/app.ts"', 'Use prompt alias from config')
     .example('$0 -i', 'Interactive mode')
     .example('$0 -x "find all TODO comments"', 'Agent mode (read-only)')
     .example('$0 -x "refactor to use async/await"', 'Agent mode (with edits)')
@@ -297,19 +357,23 @@ async function main(): Promise<void> {
         console.error(semantic.error('No query provided'));
         process.exit(1);
       }
-      const validation = validateInputSize(args.query, maxInputSize);
+      const fileContext = args.file ? readFileContext(args.file) : '';
+      const expandedQuery = expandAliases(args.query, config.prompts);
+      const fullPrompt = fileContext + expandedQuery;
+      const validation = validateInputSize(fullPrompt, maxInputSize);
       if (!validation.valid) {
         console.error(semantic.error(validation.message));
         process.exit(1);
       }
-      await runQuery(args.query, args, config, 'query');
+      await runQuery(fullPrompt, args, config, 'query');
       break;
     }
 
     case 'pipe': {
       const stdin = await readStdin();
-      const prompt = args.query ?? 'Analyze this:';
-      const fullPrompt = `<piped_input>\n${stdin.trim()}\n</piped_input>\n\n${prompt}`;
+      const basePrompt = args.query ?? 'Analyze this:';
+      const expandedPrompt = expandAliases(basePrompt, config.prompts);
+      const fullPrompt = `<piped_input>\n${stdin.trim()}\n</piped_input>\n\n${expandedPrompt}`;
       const validation = validateInputSize(fullPrompt, maxInputSize);
       if (!validation.valid) {
         console.error(semantic.error(validation.message));
@@ -329,12 +393,15 @@ async function main(): Promise<void> {
         console.error(semantic.error('No task provided for execute mode'));
         process.exit(1);
       }
-      const validation = validateInputSize(args.query, maxInputSize);
+      const fileContext = args.file ? readFileContext(args.file) : '';
+      const expandedQuery = expandAliases(args.query, config.prompts);
+      const fullPrompt = fileContext + expandedQuery;
+      const validation = validateInputSize(fullPrompt, maxInputSize);
       if (!validation.valid) {
         console.error(semantic.error(validation.message));
         process.exit(1);
       }
-      await runAgent(args.query, args, config);
+      await runAgent(fullPrompt, args, config);
       break;
     }
   }

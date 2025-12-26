@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { setColorMode } from './colors.js';
-import { formatCost, formatRelativeTime, formatTokens, formatToolCall } from './format.js';
+import {
+  formatCost,
+  formatError,
+  formatRelativeTime,
+  formatTokens,
+  formatToolCall,
+} from './format.js';
 
 // Force colors on for consistent test output
 beforeAll(() => {
@@ -165,5 +171,33 @@ describe('formatToolCall', () => {
     expect(result).toContain('CustomTool');
     expect(result).toContain('foo');
     expect(result).toContain('▸'); // Default icon
+  });
+});
+
+describe('formatError', () => {
+  test('extracts message from Error instance', () => {
+    const error = new Error('Something went wrong');
+    expect(formatError(error)).toBe('Something went wrong');
+  });
+
+  test('converts string to string', () => {
+    expect(formatError('plain string error')).toBe('plain string error');
+  });
+
+  test('converts number to string', () => {
+    expect(formatError(404)).toBe('404');
+  });
+
+  test('handles undefined', () => {
+    expect(formatError(undefined)).toBe('undefined');
+  });
+
+  test('handles null', () => {
+    expect(formatError(null)).toBe('null');
+  });
+
+  test('handles objects', () => {
+    const result = formatError({ code: 500, msg: 'fail' });
+    expect(result).toBe('[object Object]');
   });
 });

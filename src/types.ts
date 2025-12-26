@@ -60,6 +60,12 @@ export interface CliArgs {
   /** Raw output without markdown formatting */
   raw?: boolean;
 
+  /** JSON output mode */
+  json?: boolean;
+
+  /** Files to include as context */
+  file?: string[];
+
   /** Output shell integration script */
   shellInit?: 'bash' | 'zsh' | 'fish';
 

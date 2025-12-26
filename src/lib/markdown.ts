@@ -156,10 +156,17 @@ function renderInline(text: string): string {
   );
 }
 
+/** Horizontal rule width */
+const HR_WIDTH = 80;
+
 /**
- * Render a single markdown token
+ * Core token rendering logic - shared between sync and async versions
+ * Returns null for tokens that need special async handling (code blocks with highlighting)
  */
-async function renderToken(token: Token): Promise<string> {
+function renderTokenCore(
+  token: Token,
+  renderNestedTokens: (tokens: Token[]) => string
+): string | null {
   switch (token.type) {
     case 'heading': {
       const t = token as Tokens.Heading;
@@ -179,47 +186,40 @@ async function renderToken(token: Token): Promise<string> {
       return `${renderInline(t.text)}\n`;
     }
 
-    case 'code': {
-      const t = token as Tokens.Code;
-      return await renderCodeBlock(t.text, t.lang ?? '');
-    }
-
     case 'blockquote': {
       const t = token as Tokens.Blockquote;
-      const content = await renderTokens(t.tokens);
+      const content = renderNestedTokens(t.tokens);
       const lines = content.split('\n').filter(l => l.trim());
       return `${lines.map(line => `${colors.muted}│${colors.reset} ${line}`).join('\n')}\n`;
     }
 
     case 'list': {
       const t = token as Tokens.List;
-      const items: string[] = [];
-      for (const [i, item] of t.items.entries()) {
+      const items = t.items.map((item, i) => {
         const bullet = t.ordered
           ? `${colors.coral}${i + 1}.${colors.reset}`
           : `${colors.purple}•${colors.reset}`;
-        const content = await renderTokens(item.tokens);
-        items.push(`  ${bullet} ${content.trim()}`);
-      }
+        const content = renderNestedTokens(item.tokens);
+        return `  ${bullet} ${content.trim()}`;
+      });
       return `${items.join('\n')}\n`;
     }
 
     case 'list_item': {
       const t = token as Tokens.ListItem;
-      return await renderTokens(t.tokens);
+      return renderNestedTokens(t.tokens);
     }
 
     case 'hr':
-      return `\n${colors.muted}${'─'.repeat(80)}${colors.reset}\n`;
+      return `\n${colors.muted}${'─'.repeat(HR_WIDTH)}${colors.reset}\n`;
 
     case 'space':
       return '\n';
 
     case 'text': {
       const t = token as Tokens.Text;
-      // Check if it has nested tokens (like in list items)
       if ('tokens' in t && Array.isArray(t.tokens)) {
-        return await renderTokens(t.tokens);
+        return renderNestedTokens(t.tokens);
       }
       return renderInline(t.text);
     }
@@ -244,13 +244,37 @@ async function renderToken(token: Token): Promise<string> {
       return `${colors.cyan}${t.text}${colors.reset} ${colors.muted}(${t.href})${colors.reset}`;
     }
 
+    case 'code':
+      // Code blocks need special handling (sync vs async)
+      return null;
+
     default:
-      // For unknown tokens, try to extract text
       if ('text' in token && typeof token.text === 'string') {
         return renderInline(token.text);
       }
       return '';
   }
+}
+
+/**
+ * Render a single markdown token (async with syntax highlighting)
+ */
+async function renderToken(token: Token): Promise<string> {
+  // Handle code blocks with syntax highlighting
+  if (token.type === 'code') {
+    const t = token as Tokens.Code;
+    return await renderCodeBlock(t.text, t.lang ?? '');
+  }
+
+  const result = renderTokenCore(token, tokens => {
+    // For nested tokens in async context, we need sync rendering
+    // This is fine because nested tokens don't contain code blocks
+    const renderNested = (t: Token): string =>
+      renderTokenCore(t, inner => inner.map(renderNested).join('')) ?? '';
+    return tokens.map(renderNested).join('');
+  });
+
+  return result ?? '';
 }
 
 /**
@@ -296,58 +320,18 @@ export function renderSync(markdown: string): string {
   const tokens = marked.lexer(preprocessed);
 
   const renderTokenSync = (token: Token): string => {
-    switch (token.type) {
-      case 'heading': {
-        const t = token as Tokens.Heading;
-        const prefix = '#'.repeat(t.depth);
-        const text = renderInline(t.text);
-        if (t.depth === 1)
-          return `\n${colors.purple}${colors.bold}${prefix} ${text}${colors.reset}\n`;
-        if (t.depth === 2)
-          return `\n${colors.cyan}${colors.bold}${prefix} ${text}${colors.reset}\n`;
-        return `\n${colors.yellow}${prefix} ${text}${colors.reset}\n`;
-      }
-      case 'paragraph': {
-        const t = token as Tokens.Paragraph;
-        return `${renderInline(t.text)}\n`;
-      }
-      case 'code': {
-        const t = token as Tokens.Code;
-        const lines = t.text.split('\n');
-        const lang = t.lang ?? '';
-        const langLabel = lang ? `${colors.muted}─── ${colors.cyan}${lang}${colors.reset}` : '';
-        const content = lines.map(line => `  ${colors.coral}${line}${colors.reset}`).join('\n');
-        return `${langLabel}\n${content}\n`;
-      }
-      case 'list': {
-        const t = token as Tokens.List;
-        return `${t.items
-          .map((item, i) => {
-            const bullet = t.ordered
-              ? `${colors.coral}${i + 1}.${colors.reset}`
-              : `${colors.purple}•${colors.reset}`;
-            const content = item.tokens.map(renderTokenSync).join('');
-            return `  ${bullet} ${content.trim()}`;
-          })
-          .join('\n')}\n`;
-      }
-      case 'hr':
-        return `\n${colors.muted}${'─'.repeat(80)}${colors.reset}\n`;
-      case 'space':
-        return '\n';
-      case 'text': {
-        const t = token as Tokens.Text;
-        if ('tokens' in t && Array.isArray(t.tokens)) {
-          return t.tokens.map(renderTokenSync).join('');
-        }
-        return renderInline(t.text);
-      }
-      default:
-        if ('text' in token && typeof token.text === 'string') {
-          return renderInline(token.text);
-        }
-        return '';
+    // Handle code blocks without syntax highlighting
+    if (token.type === 'code') {
+      const t = token as Tokens.Code;
+      return `${renderCodeBlockSimple(t.text, t.lang ?? '')}\n`;
     }
+
+    // Use shared core logic for all other tokens
+    const result = renderTokenCore(token, nestedTokens =>
+      nestedTokens.map(renderTokenSync).join('')
+    );
+
+    return result ?? '';
   };
 
   return tokens

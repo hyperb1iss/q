@@ -16,7 +16,8 @@ import {
 } from '../lib/prompt.js';
 import { HelpOverlay } from './HelpOverlay.js';
 
-interface Message {
+/** UI-only message type (simpler than storage Message type) */
+interface UIMessage {
   role: 'user' | 'assistant';
   content: string;
 }
@@ -50,7 +51,7 @@ function formatToolInput(name: string, input: Record<string, unknown>): string {
 export function App({ initialPrompt, model }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingText, setStreamingText] = useState('');

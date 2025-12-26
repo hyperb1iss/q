@@ -24,6 +24,13 @@ export function formatCost(cost: number): string {
 }
 
 /**
+ * Extract error message from unknown error value
+ */
+export function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
  * Format relative time
  */
 export function formatRelativeTime(timestamp: number): string {

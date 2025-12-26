@@ -14,6 +14,7 @@ import type {
   SDKSystemMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
+import { formatError } from './format.js';
 
 export type { SDKMessage, SDKResultMessage, SDKAssistantMessage, SDKSystemMessage };
 
@@ -179,7 +180,7 @@ export async function query(prompt: string, options: QueryOptions = {}): Promise
       numTurns: 0,
       success: false,
       errorType: 'error_during_execution',
-      errors: [error instanceof Error ? error.message : String(error)],
+      errors: [formatError(error)],
     };
   }
 

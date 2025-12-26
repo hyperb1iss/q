@@ -8,6 +8,8 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKAssistantMessage, SDKResultMessage } from '../lib/agent.js';
 import { streamQuery } from '../lib/agent.js';
+import { semantic } from '../lib/colors.js';
+import { formatError } from '../lib/format.js';
 import {
   AUTO_APPROVED_TOOLS,
   buildSystemPrompt,
@@ -16,6 +18,13 @@ import {
 } from '../lib/prompt.js';
 import type { CliArgs, Config } from '../types.js';
 import { buildQueryOptions } from './shared.js';
+
+/** JSON output structure for pipe mode */
+interface PipeJsonOutput {
+  response: string;
+  success: boolean;
+  error?: string;
+}
 
 /**
  * Run pipe mode with tools (streaming, non-interactive)
@@ -81,14 +90,29 @@ export async function runPipe(prompt: string, args: CliArgs, _config: Config): P
             .replace(/\n{3,}/g, '\n\n')
             .trim();
 
-          // Output to stdout
-          if (cleanText) {
+          // Output based on mode
+          if (args.json) {
+            const output: PipeJsonOutput = {
+              response: cleanText,
+              success: true,
+            };
+            console.log(JSON.stringify(output));
+          } else if (cleanText) {
             console.log(cleanText);
           }
         } else {
-          // Error - output to stderr
+          // Error handling
           const errorMsg = 'error' in result ? String(result.error) : 'Request failed';
-          console.error(errorMsg);
+          if (args.json) {
+            const output: PipeJsonOutput = {
+              response: '',
+              success: false,
+              error: errorMsg,
+            };
+            console.log(JSON.stringify(output));
+          } else {
+            console.error(errorMsg);
+          }
         }
       }
     }
@@ -96,7 +120,7 @@ export async function runPipe(prompt: string, args: CliArgs, _config: Config): P
     process.exit(success ? 0 : 1);
   } catch (error) {
     // Errors go to stderr
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(semantic.error(`Error: ${formatError(error)}`));
     process.exit(1);
   }
 }

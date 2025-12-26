@@ -5,11 +5,23 @@
 import type { SDKResultMessage } from '../lib/agent.js';
 import { query, streamQuery } from '../lib/agent.js';
 import { semantic, status } from '../lib/colors.js';
-import { formatCost, formatTokens } from '../lib/format.js';
+import { formatCost, formatError, formatTokens } from '../lib/format.js';
 import { render as renderMarkdown } from '../lib/markdown.js';
 import { buildSystemPrompt, getEnvironmentContext, type PromptMode } from '../lib/prompt.js';
 import type { CliArgs, Config } from '../types.js';
 import { buildQueryOptions } from './shared.js';
+
+/** JSON output structure */
+interface JsonOutput {
+  response: string;
+  model: string;
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    cost_usd: number;
+  };
+}
 
 /**
  * Run a single query with streaming
@@ -60,23 +72,44 @@ export async function runQuery(
             .replace(/\n{3,}/g, '\n\n')
             .trim();
 
-          // Render markdown unless --raw
-          if (args.raw) {
+          // Output based on mode
+          if (args.json) {
+            const output: JsonOutput = {
+              response: responseText,
+              model: args.model ?? 'sonnet',
+            };
+            if (args.verbose) {
+              output.usage = {
+                input_tokens: result.usage.input_tokens,
+                output_tokens: result.usage.output_tokens,
+                total_tokens: result.usage.input_tokens + result.usage.output_tokens,
+                cost_usd: result.total_cost_usd,
+              };
+            }
+            console.log(JSON.stringify(output, null, 2));
+          } else if (args.raw) {
             console.log(responseText);
+            if (args.verbose) {
+              const tokens = formatTokens(result.usage.input_tokens, result.usage.output_tokens);
+              const cost = formatCost(result.total_cost_usd);
+              console.log(
+                semantic.muted(
+                  `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'}`
+                )
+              );
+            }
           } else {
             const rendered = await renderMarkdown(responseText);
             console.log(rendered);
-          }
-
-          // Only show stats with --verbose
-          if (args.verbose) {
-            const tokens = formatTokens(result.usage.input_tokens, result.usage.output_tokens);
-            const cost = formatCost(result.total_cost_usd);
-            console.log(
-              semantic.muted(
-                `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'}`
-              )
-            );
+            if (args.verbose) {
+              const tokens = formatTokens(result.usage.input_tokens, result.usage.output_tokens);
+              const cost = formatCost(result.total_cost_usd);
+              console.log(
+                semantic.muted(
+                  `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'}`
+                )
+              );
+            }
           }
         }
       }
@@ -92,23 +125,44 @@ export async function runQuery(
       }
 
       if (result.success) {
-        // Render markdown unless --raw is specified
-        if (args.raw) {
+        // Output based on mode
+        if (args.json) {
+          const output: JsonOutput = {
+            response: result.response,
+            model: args.model ?? 'sonnet',
+          };
+          if (args.verbose) {
+            output.usage = {
+              input_tokens: result.tokens.input,
+              output_tokens: result.tokens.output,
+              total_tokens: result.tokens.input + result.tokens.output,
+              cost_usd: result.cost,
+            };
+          }
+          console.log(JSON.stringify(output, null, 2));
+        } else if (args.raw) {
           console.log(result.response);
+          if (args.verbose) {
+            const tokens = formatTokens(result.tokens.input, result.tokens.output);
+            const cost = formatCost(result.cost);
+            console.log(
+              semantic.muted(
+                `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'}`
+              )
+            );
+          }
         } else {
           const rendered = await renderMarkdown(result.response);
           console.log(rendered);
-        }
-
-        // Only show stats with --verbose
-        if (args.verbose) {
-          const tokens = formatTokens(result.tokens.input, result.tokens.output);
-          const cost = formatCost(result.cost);
-          console.log(
-            semantic.muted(
-              `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'}`
-            )
-          );
+          if (args.verbose) {
+            const tokens = formatTokens(result.tokens.input, result.tokens.output);
+            const cost = formatCost(result.cost);
+            console.log(
+              semantic.muted(
+                `${status.success} ${tokens} tokens | ${cost} | ${args.model ?? 'sonnet'}`
+              )
+            );
+          }
         }
       } else {
         console.error(semantic.error(`Error: ${result.errorType}`));
@@ -123,9 +177,7 @@ export async function runQuery(
   } catch (error) {
     // Clear thinking indicator
     process.stdout.write('\r\x1b[K');
-    console.error(
-      semantic.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
-    );
+    console.error(semantic.error(`Error: ${formatError(error)}`));
     process.exit(1);
   }
 }

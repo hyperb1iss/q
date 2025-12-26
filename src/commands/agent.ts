@@ -7,7 +7,7 @@ import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKAssistantMessage, SDKResultMessage, SDKSystemMessage } from '../lib/agent.js';
 import { streamQuery } from '../lib/agent.js';
 import { color, semantic, status } from '../lib/colors.js';
-import { formatCost, formatTokens, formatToolCall } from '../lib/format.js';
+import { formatCost, formatError, formatTokens, formatToolCall } from '../lib/format.js';
 import { render as renderMarkdown } from '../lib/markdown.js';
 import {
   AUTO_APPROVED_TOOLS,
@@ -225,8 +225,8 @@ export async function runAgent(
       return { behavior: 'deny', message: result.message ?? 'User denied' };
     }
 
-    // Default: allow unknown tools (SDK handles them)
-    return { behavior: 'allow', updatedInput: input };
+    // Security: deny unknown tools by default
+    return { behavior: 'deny', message: `Unknown tool: ${toolName}` };
   };
 
   try {
@@ -342,9 +342,7 @@ export async function runAgent(
       }
     }
   } catch (error) {
-    console.error(
-      semantic.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
-    );
+    console.error(semantic.error(`Error: ${formatError(error)}`));
     process.exit(1);
   }
 }
