@@ -5,19 +5,13 @@
  * Perfect Unix citizen for pipelines.
  */
 
-import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKAssistantMessage, SDKResultMessage } from '../lib/agent.js';
 import { streamQuery } from '../lib/agent.js';
 import { semantic } from '../lib/colors.js';
 import { formatError } from '../lib/format.js';
-import {
-  AUTO_APPROVED_TOOLS,
-  buildSystemPrompt,
-  getEnvironmentContext,
-  INTERACTIVE_TOOLS,
-} from '../lib/prompt.js';
+import { buildSystemPrompt, getEnvironmentContext, INTERACTIVE_TOOLS } from '../lib/prompt.js';
 import type { CliArgs, Config } from '../types.js';
-import { buildQueryOptions } from './shared.js';
+import { buildQueryOptions, createPermissionHandler } from './shared.js';
 
 /** JSON output structure for pipe mode */
 interface PipeJsonOutput {
@@ -35,16 +29,7 @@ interface PipeJsonOutput {
  */
 export async function runPipe(prompt: string, args: CliArgs, _config: Config): Promise<void> {
   // Permission handler: allow read-only, deny write operations
-  const canUseTool = async (
-    toolName: string,
-    input: Record<string, unknown>
-  ): Promise<PermissionResult> => {
-    if (AUTO_APPROVED_TOOLS.includes(toolName)) {
-      return { behavior: 'allow', updatedInput: input };
-    }
-    // Deny write tools in pipe mode - can't prompt for approval
-    return { behavior: 'deny', message: 'Write operations not allowed in pipe mode' };
-  };
+  const canUseTool = createPermissionHandler({ mode: 'deny' });
 
   try {
     const systemPrompt = buildSystemPrompt(await getEnvironmentContext(), 'pipe');

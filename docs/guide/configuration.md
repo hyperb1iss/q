@@ -53,6 +53,53 @@ safety:
     - 'sudo rm'
 ```
 
+## Project Context
+
+Create a `.q/context.md` file in your project root to add project-specific context that gets automatically included in every query. This is useful for:
+
+- Project conventions and coding standards
+- Architecture notes
+- Common tasks and workflows
+- Team-specific instructions
+
+```markdown
+<!-- .q/context.md -->
+# My Project
+
+- This is a TypeScript + React project
+- We use Tailwind CSS for styling
+- Run tests with `bun test`
+- Follow conventional commits
+```
+
+The context file is searched in this order:
+1. `.q/context.md`
+2. `.q/CONTEXT.md`
+3. `CONTEXT.md`
+
+## Security Considerations
+
+### Code Execution in Config Files
+
+JavaScript config files (`q.config.js`, `q.config.mjs`, `q.config.ts`) are **executed** when loaded. This is a feature that enables dynamic configuration, but has security implications:
+
+- Only use config files you trust
+- Be cautious running `q` in untrusted directories that may contain malicious config files
+- Use `--no-config` to skip config loading entirely when running in untrusted contexts
+
+```bash
+# Skip all config files (safe mode)
+q --no-config "explain this error"
+```
+
+### Shell Integration
+
+When using shell integration (`eval "$(q --shell-init zsh)"`), be aware that:
+
+- The integration captures your working directory and shell environment
+- This context is sent to the Claude API with each query
+- Use environment variables to exclude sensitive directories if needed
+
 ## Environment Variables
 
 | Variable            | Description                       |

@@ -18,8 +18,18 @@ q [query] [options]
 | ----------------- | ----- | -------------------------------------------------- |
 | `--interactive`   | `-i`  | Open interactive TUI mode                          |
 | `--execute`       | `-x`  | Enable agent tools (Read, Glob, Grep, Bash)        |
+| `--dry-run`       |       | Show tools without executing (use with `-x`)       |
 | `--resume <id>`   | `-r`  | Resume a previous session ("last" for most recent) |
+| `--continue`      | `-c`  | Continue last session (shortcut for `-r last`)     |
 | `--model <model>` | `-m`  | Model to use: sonnet, opus, haiku                  |
+| `--file <path>`   | `-f`  | Include file(s) as context (can be repeated)       |
+| `--quiet`         | `-q`  | Minimal output (response only)                     |
+| `--verbose`       | `-v`  | Show token/cost stats                              |
+| `--raw`           |       | Raw output without markdown formatting             |
+| `--json`          |       | Output response as JSON                            |
+| `--sessions`      |       | List recent sessions                               |
+| `--no-config`     |       | Skip loading config files (security)               |
+| `--color <mode>`  |       | Color mode: auto, always, never                    |
 | `--version`       |       | Show version number                                |
 | `--help`          |       | Show help                                          |
 
@@ -57,8 +67,30 @@ q --execute "run tests and fix failures"
 ### Resume Session
 
 ```bash
-q -r           # Resume last session
+q -c           # Continue last session
+q -r last      # Equivalent to -c
 q -r abc123    # Resume specific session
+```
+
+### Dry Run
+
+```bash
+q -x --dry-run "refactor this"  # See what tools would run
+```
+
+### Include Files
+
+```bash
+q -f src/app.ts "explain this"
+q -f src/*.ts "review these files"
+```
+
+### Output Formats
+
+```bash
+q --json "query"     # JSON output
+q --raw "query"      # No markdown formatting
+q -q "query"         # Minimal output
 ```
 
 ### Model Selection

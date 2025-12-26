@@ -2,7 +2,9 @@
  * System prompt for q - The Shell's Quiet Companion
  */
 
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir, hostname, platform, release, userInfo } from 'node:os';
+import { join } from 'node:path';
 import { getGitInfo } from './git.js';
 
 export interface EnvironmentContext {
@@ -12,6 +14,27 @@ export interface EnvironmentContext {
   termProgram?: string;
   gitBranch?: string;
   gitStatus?: 'clean' | 'dirty';
+  projectContext?: string;
+}
+
+/** Paths to check for project context (in order of priority) */
+const CONTEXT_PATHS = ['.q/context.md', '.q/CONTEXT.md', 'CONTEXT.md'];
+
+/**
+ * Load project context from context.md if it exists
+ */
+function loadProjectContext(cwd: string): string | undefined {
+  for (const relPath of CONTEXT_PATHS) {
+    const fullPath = join(cwd, relPath);
+    if (existsSync(fullPath)) {
+      try {
+        return readFileSync(fullPath, 'utf-8').trim();
+      } catch {
+        // Ignore read errors, try next path
+      }
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -134,17 +157,27 @@ export function buildSystemPrompt(ctx?: EnvironmentContext, mode: PromptMode = '
       break;
   }
 
-  const envBlock = ctx ? buildEnvironmentBlock(ctx) : '';
-  return envBlock ? `${basePrompt}\n\n${envBlock}` : basePrompt;
+  const parts = [basePrompt];
+
+  // Add environment context
+  if (ctx) {
+    parts.push(buildEnvironmentBlock(ctx));
+
+    // Add project-specific context if available
+    if (ctx.projectContext) {
+      parts.push(`## Project Context\n${ctx.projectContext}`);
+    }
+  }
+
+  return parts.join('\n\n');
 }
 
 /**
  * Get current environment context (async for non-blocking git)
  */
 export async function getEnvironmentContext(): Promise<EnvironmentContext> {
-  const ctx: EnvironmentContext = {
-    cwd: process.cwd(),
-  };
+  const cwd = process.cwd();
+  const ctx: EnvironmentContext = { cwd };
 
   // Only add optional properties if they have values
   const shell = process.env.SHELL;
@@ -161,6 +194,12 @@ export async function getEnvironmentContext(): Promise<EnvironmentContext> {
   if (git) {
     ctx.gitBranch = git.branch;
     ctx.gitStatus = git.status;
+  }
+
+  // Load project context from context.md if it exists
+  const projectContext = loadProjectContext(cwd);
+  if (projectContext) {
+    ctx.projectContext = projectContext;
   }
 
   return ctx;

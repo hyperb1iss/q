@@ -3,7 +3,6 @@
  */
 
 import * as readline from 'node:readline';
-import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKAssistantMessage, SDKResultMessage, SDKSystemMessage } from '../lib/agent.js';
 import { streamQuery } from '../lib/agent.js';
 import { color, semantic, status } from '../lib/colors.js';
@@ -15,12 +14,7 @@ import {
   SEPARATOR_WIDTH,
 } from '../lib/format.js';
 import { render as renderMarkdown } from '../lib/markdown.js';
-import {
-  AUTO_APPROVED_TOOLS,
-  buildSystemPrompt,
-  getEnvironmentContext,
-  INTERACTIVE_TOOLS,
-} from '../lib/prompt.js';
+import { buildSystemPrompt, getEnvironmentContext, INTERACTIVE_TOOLS } from '../lib/prompt.js';
 import {
   addMessage,
   createSession,
@@ -28,7 +22,7 @@ import {
   updateSessionStats,
 } from '../lib/storage.js';
 import type { CliArgs, Config } from '../types.js';
-import { APPROVAL_REQUIRED_TOOLS, buildQueryOptions, MODEL_MAP } from './shared.js';
+import { buildQueryOptions, createPermissionHandler, MODEL_MAP } from './shared.js';
 
 /** Patterns that indicate high-risk commands */
 const HIGH_RISK_PATTERNS = [
@@ -175,6 +169,109 @@ async function promptToolApproval(
   });
 }
 
+/** Mutable state for streaming display */
+interface StreamState {
+  fullText: string;
+  lastShownText: string;
+  toolCount: number;
+  hasShownTools: boolean;
+  seenTools: Set<string>;
+}
+
+/**
+ * Process assistant message: extract text and tool calls
+ */
+function processAssistantMessage(
+  msg: SDKAssistantMessage,
+  state: StreamState,
+  quiet: boolean
+): void {
+  // First pass: show any text that appears before tools (announcement)
+  for (const block of msg.message.content) {
+    if ('text' in block && block.text) {
+      state.fullText = block.text;
+      // Show new text incrementally before tools appear
+      if (!state.hasShownTools && state.fullText !== state.lastShownText) {
+        const newText = state.fullText.slice(state.lastShownText.length);
+        if (newText && !quiet) {
+          process.stdout.write(newText);
+        }
+        state.lastShownText = state.fullText;
+      }
+    }
+  }
+
+  // Second pass: show tool calls
+  for (const block of msg.message.content) {
+    if ('type' in block && block.type === 'tool_use') {
+      const toolBlock = block as { type: 'tool_use'; name: string; input: Record<string, unknown> };
+      // Dedupe tool calls by name+input
+      const toolKey = `${toolBlock.name}:${JSON.stringify(toolBlock.input)}`;
+      if (!state.seenTools.has(toolKey)) {
+        state.seenTools.add(toolKey);
+        // Add newline before first tool if we showed announcement text
+        if (!state.hasShownTools && state.lastShownText && !quiet) {
+          console.log();
+        }
+        state.hasShownTools = true;
+        if (!quiet) {
+          console.log(formatToolCall(toolBlock.name, toolBlock.input));
+        }
+        state.toolCount++;
+      }
+    }
+  }
+}
+
+/**
+ * Handle result message: render output and save session
+ */
+async function handleResultMessage(
+  result: SDKResultMessage,
+  state: StreamState,
+  sessionId: string,
+  task: string,
+  args: CliArgs
+): Promise<void> {
+  const quiet = args.quiet ?? false;
+
+  // Render the final text as markdown (skip announcement part we already showed)
+  if (state.fullText && !quiet) {
+    console.log();
+    // If we showed tools, render full markdown response
+    // If no tools, we already streamed the text - just add newline
+    if (state.hasShownTools) {
+      const rendered = await renderMarkdown(state.fullText);
+      console.log(rendered);
+    } else if (!state.lastShownText) {
+      // No streaming happened, render now
+      const rendered = await renderMarkdown(state.fullText);
+      console.log(rendered);
+    }
+  }
+
+  // Save assistant response to session
+  const totalTokens = result.usage.input_tokens + result.usage.output_tokens;
+  addMessage(sessionId, 'assistant', state.fullText, totalTokens);
+  updateSessionStats(sessionId, totalTokens, result.total_cost_usd, task.slice(0, 50));
+
+  // Only show stats with --verbose
+  if (args.verbose) {
+    const tokens = formatTokens(result.usage.input_tokens, result.usage.output_tokens);
+    const cost = formatCost(result.total_cost_usd);
+
+    console.log();
+    console.log(semantic.muted('─'.repeat(SEPARATOR_WIDTH)));
+    console.log(
+      semantic.muted(
+        `${status.success} ${tokens} tokens │ ${cost} │ ${args.model ?? 'sonnet'} │ ` +
+          `${result.num_turns} turns │ ${state.toolCount} tools`
+      )
+    );
+    console.log(semantic.muted(`session: ${sessionId}`));
+  }
+}
+
 /**
  * Run agent mode with tools (streaming)
  */
@@ -197,49 +294,23 @@ export async function runAgent(
     console.log(semantic.muted('─'.repeat(SEPARATOR_WIDTH)));
   }
 
-  let fullText = '';
-  let lastShownText = '';
-  let toolCount = 0;
-  let hasShownTools = false;
-  const seenTools = new Set<string>();
+  const state: StreamState = {
+    fullText: '',
+    lastShownText: '',
+    toolCount: 0,
+    hasShownTools: false,
+    seenTools: new Set<string>(),
+  };
   const alwaysApprovedTools = new Set<string>();
 
   // Custom permission handler for dangerous tools
-  const canUseTool = async (
-    toolName: string,
-    input: Record<string, unknown>
-  ): Promise<PermissionResult> => {
-    // Dry-run mode: show what would be called but don't execute
-    if (args.dryRun) {
-      console.log(formatToolCall(toolName, input));
-      return { behavior: 'deny', message: '[dry-run] Tool execution skipped' };
-    }
-
-    // Auto-approve read-only tools
-    if (AUTO_APPROVED_TOOLS.includes(toolName)) {
-      return { behavior: 'allow', updatedInput: input };
-    }
-
-    // Check if user said "always" for this tool
-    if (alwaysApprovedTools.has(toolName)) {
-      return { behavior: 'allow', updatedInput: input };
-    }
-
-    // Prompt for approval-required tools
-    if (APPROVAL_REQUIRED_TOOLS.includes(toolName)) {
-      const result = await promptToolApproval(toolName, input);
-      if (result.approved) {
-        if (result.message === 'always') {
-          alwaysApprovedTools.add(toolName);
-        }
-        return { behavior: 'allow', updatedInput: input };
-      }
-      return { behavior: 'deny', message: result.message ?? 'User denied' };
-    }
-
-    // Security: deny unknown tools by default
-    return { behavior: 'deny', message: `Unknown tool: ${toolName}` };
-  };
+  const canUseTool = createPermissionHandler({
+    dryRun: args.dryRun ?? false,
+    dryRunLogger: (toolName, input) => console.log(formatToolCall(toolName, input)),
+    mode: 'prompt',
+    promptApproval: promptToolApproval,
+    alwaysApproved: alwaysApprovedTools,
+  });
 
   try {
     // Agent mode - enable common tools with custom permission handler
@@ -263,94 +334,15 @@ export async function runAgent(
           updateSdkSessionId(session.id, sysMsg.session_id);
         }
       }
-      // Handle tool use
+
+      // Handle assistant messages (text and tool calls)
       if (message.type === 'assistant') {
-        const assistantMsg = message as SDKAssistantMessage;
-
-        // First pass: show any text that appears before tools (announcement)
-        for (const block of assistantMsg.message.content) {
-          if ('text' in block && block.text) {
-            fullText = block.text;
-            // Show new text incrementally before tools appear
-            if (!hasShownTools && fullText !== lastShownText) {
-              const newText = fullText.slice(lastShownText.length);
-              if (newText && !quiet) {
-                process.stdout.write(newText);
-              }
-              lastShownText = fullText;
-            }
-          }
-        }
-
-        // Second pass: show tool calls
-        for (const block of assistantMsg.message.content) {
-          if ('type' in block && block.type === 'tool_use') {
-            const toolBlock = block as {
-              type: 'tool_use';
-              name: string;
-              input: Record<string, unknown>;
-            };
-            // Dedupe tool calls by name+input
-            const toolKey = `${toolBlock.name}:${JSON.stringify(toolBlock.input)}`;
-            if (!seenTools.has(toolKey)) {
-              seenTools.add(toolKey);
-              // Add newline before first tool if we showed announcement text
-              if (!hasShownTools && lastShownText && !quiet) {
-                console.log();
-              }
-              hasShownTools = true;
-              if (!quiet) {
-                console.log(formatToolCall(toolBlock.name, toolBlock.input));
-              }
-              toolCount++;
-            }
-          }
-        }
+        processAssistantMessage(message as SDKAssistantMessage, state, quiet);
       }
 
       // Handle result - render markdown and show stats
       if (message.type === 'result') {
-        const result = message as SDKResultMessage;
-
-        // Render the final text as markdown (skip announcement part we already showed)
-        if (fullText && !quiet) {
-          console.log();
-          // If we showed tools, render full markdown response
-          // If no tools, we already streamed the text - just add newline
-          if (hasShownTools) {
-            const rendered = await renderMarkdown(fullText);
-            console.log(rendered);
-          } else if (!lastShownText) {
-            // No streaming happened, render now
-            const rendered = await renderMarkdown(fullText);
-            console.log(rendered);
-          }
-        }
-
-        // Save assistant response to session
-        const totalTokens = result.usage.input_tokens + result.usage.output_tokens;
-        addMessage(session.id, 'assistant', fullText, totalTokens);
-        updateSessionStats(
-          session.id,
-          totalTokens,
-          result.total_cost_usd,
-          task.slice(0, 50) // Use first 50 chars of task as title
-        );
-
-        // Only show stats with --verbose
-        if (args.verbose) {
-          const tokens = formatTokens(result.usage.input_tokens, result.usage.output_tokens);
-          const cost = formatCost(result.total_cost_usd);
-
-          console.log();
-          console.log(semantic.muted('─'.repeat(SEPARATOR_WIDTH)));
-          console.log(
-            semantic.muted(
-              `${status.success} ${tokens} tokens │ ${cost} │ ${args.model ?? 'sonnet'} │ ${result.num_turns} turns │ ${toolCount} tools`
-            )
-          );
-          console.log(semantic.muted(`session: ${session.id}`));
-        }
+        await handleResultMessage(message as SDKResultMessage, state, session.id, task, args);
       }
     }
   } catch (error) {
