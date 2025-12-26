@@ -39,8 +39,17 @@ export interface CliArgs {
   /** Execute mode (enable tools) */
   execute?: boolean;
 
+  /** Dry run mode (show tools but don't execute) */
+  dryRun?: boolean;
+
   /** Resume a previous session */
   resume?: string | boolean;
+
+  /** Continue the last session (shortcut for --resume last) */
+  continue?: boolean;
+
+  /** Skip loading config files (security) */
+  noConfig?: boolean;
 
   /** List recent sessions */
   sessions?: boolean;

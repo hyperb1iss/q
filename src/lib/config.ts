@@ -26,13 +26,27 @@ export function defineConfig(config: Partial<Config>): Partial<Config> {
   return config;
 }
 
+export interface LoadConfigOptions {
+  cwd?: string;
+  /** Skip loading config files entirely (for security) */
+  skipLoad?: boolean;
+}
+
 /**
  * Load configuration from disk
  * Searches up the directory tree for config files
  */
-export async function loadQConfig(cwd?: string): Promise<Config> {
+export async function loadQConfig(options: LoadConfigOptions = {}): Promise<Config> {
+  const { cwd, skipLoad = false } = options;
+
   // Return cached config if available
   if (cachedConfig) {
+    return cachedConfig;
+  }
+
+  // If skipLoad, just return defaults
+  if (skipLoad) {
+    cachedConfig = { ...defaultConfig };
     return cachedConfig;
   }
 

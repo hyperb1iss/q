@@ -115,10 +115,23 @@ function parseArgs(): CliArgs {
       describe:
         'Agent mode with tools (Read, Glob, Grep auto-approved; Bash, Write, Edit require confirmation)',
     })
+    .option('dry-run', {
+      type: 'boolean',
+      describe: 'Show what tools would be called without executing (use with -x)',
+    })
     .option('resume', {
       alias: 'r',
       type: 'string',
       describe: 'Resume a previous session (use "last" for most recent)',
+    })
+    .option('continue', {
+      alias: 'c',
+      type: 'boolean',
+      describe: 'Continue the last session (shortcut for --resume last)',
+    })
+    .option('no-config', {
+      type: 'boolean',
+      describe: 'Skip loading config files (security: prevents code execution)',
     })
     .option('sessions', {
       type: 'boolean',
@@ -254,8 +267,8 @@ async function promptForContinuation(): Promise<string | null> {
  * Main entry point
  */
 async function main(): Promise<void> {
-  const config = await loadQConfig();
   const args = parseArgs();
+  const config = await loadQConfig({ skipLoad: args.noConfig ?? false });
   const mode = detectMode(args);
 
   // When stdout is piped, auto-enable clean output mode
@@ -304,6 +317,11 @@ async function main(): Promise<void> {
     console.log(semantic.muted('Get your API key at: https://console.anthropic.com/settings/keys'));
     console.log(semantic.muted('Add to ~/.zshrc or ~/.bashrc to persist across sessions.'));
     process.exit(1);
+  }
+
+  // Handle --continue flag (shortcut for --resume last)
+  if (args.continue) {
+    args.resume = 'last';
   }
 
   // Handle --resume flag

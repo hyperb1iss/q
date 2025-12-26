@@ -29,7 +29,8 @@
     "clean": "rm -rf dist q",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -68,6 +69,7 @@
     "@types/bun": "^1.3.5",
     "@types/react": "^19.2.7",
     "@types/yargs": "^17.0.35",
+    "husky": "^9.1.7",
     "prettier": "^3.7.4",
     "react-devtools-core": "^7.0.1",
     "typescript": "^5.9.3",

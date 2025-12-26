@@ -209,6 +209,12 @@ export async function runAgent(
     toolName: string,
     input: Record<string, unknown>
   ): Promise<PermissionResult> => {
+    // Dry-run mode: show what would be called but don't execute
+    if (args.dryRun) {
+      console.log(formatToolCall(toolName, input));
+      return { behavior: 'deny', message: '[dry-run] Tool execution skipped' };
+    }
+
     // Auto-approve read-only tools
     if (AUTO_APPROVED_TOOLS.includes(toolName)) {
       return { behavior: 'allow', updatedInput: input };
