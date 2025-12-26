@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { box, color, colors, semantic, setColorMode, status } from './colors.js';
+import { color, colors, semantic, setColorMode, status } from './colors.js';
 
 // Force colors on for tests (no TTY in test environment)
 beforeAll(() => {
@@ -127,27 +127,5 @@ describe('status indicators', () => {
   test('thinking is purple diamond', () => {
     expect(status.thinking).toContain('◆');
     expect(status.thinking).toContain(colors.purple);
-  });
-});
-
-describe('box drawing characters', () => {
-  test('exports corner characters', () => {
-    expect(box.topLeft).toBe('┌');
-    expect(box.topRight).toBe('┐');
-    expect(box.bottomLeft).toBe('└');
-    expect(box.bottomRight).toBe('┘');
-  });
-
-  test('exports line characters', () => {
-    expect(box.horizontal).toBe('─');
-    expect(box.vertical).toBe('│');
-  });
-
-  test('exports tee characters', () => {
-    expect(box.teeRight).toBe('├');
-    expect(box.teeLeft).toBe('┤');
-    expect(box.teeDown).toBe('┬');
-    expect(box.teeUp).toBe('┴');
-    expect(box.cross).toBe('┼');
   });
 });

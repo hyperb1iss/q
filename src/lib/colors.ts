@@ -110,20 +110,3 @@ export const status = {
     return color('◆', 'purple');
   },
 } as const;
-
-/**
- * Box drawing characters for TUI elements
- */
-export const box = {
-  topLeft: '┌',
-  topRight: '┐',
-  bottomLeft: '└',
-  bottomRight: '┘',
-  horizontal: '─',
-  vertical: '│',
-  teeRight: '├',
-  teeLeft: '┤',
-  teeDown: '┬',
-  teeUp: '┴',
-  cross: '┼',
-} as const;

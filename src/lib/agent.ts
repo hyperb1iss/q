@@ -241,33 +241,3 @@ export async function* streamQuery(
 
   yield* sdkQuery({ prompt, options: sdkOptions });
 }
-
-/**
- * Check if Claude Code is available
- */
-export async function isClaudeAvailable(): Promise<boolean> {
-  try {
-    // Try a minimal query - the SDK will fail if Claude isn't installed
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    for await (const msg of sdkQuery({
-      prompt: 'echo "test"',
-      options: {
-        abortController: controller,
-        maxTurns: 1,
-        tools: [], // No tools needed
-      },
-    })) {
-      if (msg.type === 'system') {
-        clearTimeout(timeout);
-        return true;
-      }
-    }
-
-    clearTimeout(timeout);
-    return true;
-  } catch {
-    return false;
-  }
-}

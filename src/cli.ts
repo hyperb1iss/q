@@ -19,7 +19,10 @@ import { getLastSession, getSession } from './lib/storage.js';
 import type { CliArgs, Mode } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const VERSION = '0.1.0';
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8')) as {
+  version: string;
+};
+const VERSION = pkg.version;
 
 /** Default max input size if not configured */
 const DEFAULT_MAX_INPUT_SIZE = 100000;

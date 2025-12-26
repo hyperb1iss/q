@@ -21,17 +21,19 @@ jobs:
         with:
           bun-version: latest
 
+      - name: '◈ Cache Bun modules'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       - name: '◈ Install dependencies'
         run: bun install --frozen-lockfile
 
       - name: '▲ Build'
         run: bun run build
 
-      - name: '● Type check'
-        run: bun run typecheck
-
-      - name: '● Lint & Format'
+      - name: '● Quality checks'
         run: bun run check
-
-      - name: '◉ Test'
-        run: bun test

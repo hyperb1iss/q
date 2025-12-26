@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { QueryOptions, QueryResult } from './agent.js';
-import { isClaudeAvailable, query, streamQuery } from './agent.js';
+import { query, streamQuery } from './agent.js';
 
 describe('agent module exports', () => {
   test('exports query function', () => {
@@ -16,10 +16,6 @@ describe('agent module exports', () => {
 
   test('exports streamQuery function', () => {
     expect(typeof streamQuery).toBe('function');
-  });
-
-  test('exports isClaudeAvailable function', () => {
-    expect(typeof isClaudeAvailable).toBe('function');
   });
 });
 
