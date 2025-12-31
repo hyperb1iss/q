@@ -6,7 +6,7 @@
  * Elegant CLI agent for quick queries with Claude.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import * as readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -28,16 +28,31 @@ const VERSION = pkg.version;
 const DEFAULT_MAX_INPUT_SIZE = 100000;
 
 /**
- * Read files and format as context block
+ * Format file size for display
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+/**
+ * Build file context with metadata only
+ * Claude can use Read tool if it needs actual content
  */
 function readFileContext(files: string[]): string {
   const blocks: string[] = [];
 
   for (const filePath of files) {
     try {
-      const content = readFileSync(filePath, 'utf-8');
       const name = filePath.split('/').pop() ?? filePath;
-      blocks.push(`<file name="${name}" path="${filePath}">\n${content}\n</file>`);
+      const stats = statSync(filePath);
+      const size = formatFileSize(stats.size);
+
+      blocks.push(
+        `<file name="${name}" path="${filePath}" size="${size}">\n` +
+          `[File reference - use this exact filename in commands]\n</file>`
+      );
     } catch (error) {
       console.error(
         semantic.error(
@@ -204,6 +219,8 @@ function detectMode(args: CliArgs): Mode {
 
   if (args.interactive) return 'interactive';
   if (args.execute) return 'execute';
+  // File references imply agent mode (need tools to work with files)
+  if (args.file?.length) return 'execute';
   if (!stdinIsTTY) return 'pipe';
   if (args.query) return 'query';
   return 'interactive';
