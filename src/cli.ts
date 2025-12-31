@@ -186,7 +186,8 @@ function parseArgs(): CliArgs {
       alias: 'f',
       type: 'array',
       string: true,
-      describe: 'Include file(s) as context',
+      nargs: 1,
+      describe: 'Include file(s) as context (use multiple -f for multiple files)',
     })
     .option('shell-init', {
       type: 'string',
@@ -202,6 +203,7 @@ function parseArgs(): CliArgs {
     .example('$0 "what does this error mean"', 'Quick query')
     .example('cat error.log | $0 "explain this"', 'Pipe mode')
     .example('$0 -f src/index.ts "explain this"', 'Include file as context')
+    .example('$0 -f a.ts -f b.ts "compare these"', 'Multiple files')
     .example('$0 "@review src/app.ts"', 'Use prompt alias from config')
     .example('$0 -i', 'Interactive mode')
     .example('$0 -x "find all TODO comments"', 'Agent mode (read-only)')
