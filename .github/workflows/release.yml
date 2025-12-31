@@ -127,7 +127,7 @@ jobs:
 
       - name: '◈ Generate changelog'
         if: ${{ !inputs.skip_changelog && !inputs.dry_run }}
-        uses: hyperb1iss/git-iris@a6381c844ef92d7e3333913367dca575387d6f36
+        uses: hyperb1iss/git-iris@v2
         with:
           command: changelog
           from: v${{ steps.version.outputs.current }}
@@ -138,12 +138,11 @@ jobs:
           provider: anthropic
           model: claude-sonnet-4-5-20250929
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          build-from-source: 'true'
 
       - name: '◈ Generate release notes'
         if: ${{ !inputs.dry_run }}
         id: release_notes
-        uses: hyperb1iss/git-iris@a6381c844ef92d7e3333913367dca575387d6f36
+        uses: hyperb1iss/git-iris@v2
         with:
           command: release-notes
           from: v${{ steps.version.outputs.current }}
@@ -152,7 +151,6 @@ jobs:
           provider: anthropic
           model: claude-sonnet-4-5-20250929
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          build-from-source: 'true'
 
       - name: '◆ Commit version bump'
         if: ${{ !inputs.dry_run }}
