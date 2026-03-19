@@ -56,7 +56,7 @@
     "bun": ">=1.1.0"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.76",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.79",
     "c12": "^3.3.3",
     "ink": "^6.6.0",
     "ink-spinner": "^5.0.0",
